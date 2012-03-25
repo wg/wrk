@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
     uint64_t start    = time_us();
     uint64_t complete = 0;
     uint64_t bytes    = 0;
-    errors_t errors   = { 0 };
+    errors errors     = { 0 };
 
     for (int i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];

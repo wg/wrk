@@ -1,5 +1,5 @@
-#ifndef __STATS_H
-#define __STATS_H
+#ifndef STATS_H
+#define STATS_H
 
 typedef struct {
     int samples;
@@ -17,5 +17,5 @@ long double stats_mean(stats *);
 long double stats_stdev(stats *stats, long double);
 long double stats_within_stdev(stats *, long double, long double, uint64_t);
 
-#endif /* __STATS_H */
+#endif /* STATS_H */
 

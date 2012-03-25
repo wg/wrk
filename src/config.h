@@ -1,5 +1,5 @@
-#ifndef __CONFIG_H
-#define __CONFIG_H
+#ifndef CONFIG_H
+#define CONFIG_H
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #define HAVE_KQUEUE
@@ -8,4 +8,4 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
-#endif /* __CONFIG_H */
+#endif /* CONFIG_H */

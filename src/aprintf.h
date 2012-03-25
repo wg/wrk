@@ -1,6 +1,6 @@
-#ifndef __APRINTF_H
-#define __APRINTF_H
+#ifndef APRINTF_H
+#define APRINTF_H
 
 char *aprintf(char **, const char *, ...);
 
-#endif /* __APRINTF_H */
+#endif /* APRINTF_H */

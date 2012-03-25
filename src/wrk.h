@@ -1,5 +1,5 @@
-#ifndef __WRK_H
-#define __WRK_H
+#ifndef WRK_H
+#define WRK_H
 
 #include "config.h"
 #include <pthread.h>
@@ -25,7 +25,7 @@ typedef struct {
     uint32_t write;
     uint32_t status;
     uint32_t timeout;
-} errors_t;
+} errors;
 
 typedef struct {
     pthread_t thread;
@@ -36,11 +36,11 @@ typedef struct {
     uint64_t bytes;
     uint64_t start;
     tinymt64_t rand;
-    errors_t errors;
-    struct _connection *cs;
+    errors errors;
+    struct connection *cs;
 } thread;
 
-typedef struct _connection {
+typedef struct connection {
     thread *thread;
     http_parser parser;
     int fd;
@@ -72,4 +72,4 @@ static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
 
-#endif /* __WRK_H */
+#endif /* WRK_H */
