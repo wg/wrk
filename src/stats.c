@@ -7,7 +7,7 @@
 #include "stats.h"
 #include "zmalloc.h"
 
-stats *stats_alloc(int samples) {
+stats *stats_alloc(uint64_t samples) {
     stats *stats = zcalloc(sizeof(stats) + sizeof(uint64_t) * samples);
     stats->samples = samples;
     return stats;
@@ -25,7 +25,7 @@ void stats_record(stats *stats, uint64_t x) {
 
 uint64_t stats_min(stats *stats) {
     uint64_t min = 0;
-    for (int i = 0; i < stats->limit; i++) {
+    for (uint64_t i = 0; i < stats->limit; i++) {
         uint64_t x = stats->data[i];
         if (x < min || min == 0) min = x;
     }
@@ -34,7 +34,7 @@ uint64_t stats_min(stats *stats) {
 
 uint64_t stats_max(stats *stats) {
     uint64_t max = 0;
-    for (int i = 0; i < stats->limit; i++) {
+    for (uint64_t i = 0; i < stats->limit; i++) {
         uint64_t x = stats->data[i];
         if (x > max || max == 0) max = x;
     }
@@ -44,7 +44,7 @@ uint64_t stats_max(stats *stats) {
 long double stats_mean(stats *stats) {
     uint64_t sum = 0;
     if (stats->limit == 0) return 0.0;
-    for (int i = 0; i < stats->limit; i++) {
+    for (uint64_t i = 0; i < stats->limit; i++) {
         sum += stats->data[i];
     }
     return sum / (long double) stats->limit;
@@ -53,7 +53,7 @@ long double stats_mean(stats *stats) {
 long double stats_stdev(stats *stats, long double mean) {
     long double sum = 0.0;
     if (stats->limit < 2) return 0.0;
-    for (int i = 0; i < stats->limit; i++) {
+    for (uint64_t i = 0; i < stats->limit; i++) {
         sum += powl(stats->data[i] - mean, 2);
     }
     return sqrtl(sum / (stats->limit - 1));
@@ -64,7 +64,7 @@ long double stats_within_stdev(stats *stats, long double mean, long double stdev
     long double lower = mean - (stdev * n);
     uint64_t sum = 0;
 
-    for (int i = 0; i < stats->limit; i++) {
+    for (uint64_t i = 0; i < stats->limit; i++) {
         uint64_t x = stats->data[i];
         if (x >= lower && x <= upper) sum++;
     }

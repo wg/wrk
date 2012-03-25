@@ -127,14 +127,14 @@ int main(int argc, char **argv) {
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t requests    = cfg.requests    / cfg.threads;
 
-    for (int i = 0; i < cfg.threads; i++) {
+    for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         t->connections = connections;
         t->requests    = requests;
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %d %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %zu %s\n", i, msg);
             exit(2);
         }
     }
@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
-    for (int i = 0; i < cfg.threads; i++) {
+    for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         pthread_join(t->thread, NULL);
 
@@ -198,7 +198,7 @@ void *thread_main(void *arg) {
 
     connection *c = thread->cs;
 
-    for (int i = 0; i < thread->connections; i++, c++) {
+    for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread  = thread;
         c->latency = 0;
         connect_socket(thread, c);
@@ -308,7 +308,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 
     uint64_t maxAge = time_us() - (cfg.timeout * 1000);
 
-    for (int i = 0; i < thread->connections; i++, c++) {
+    for (uint64_t i = 0; i < thread->connections; i++, c++) {
         if (maxAge > c->start) {
             thread->errors.timeout++;
         }
@@ -334,7 +334,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-    int n;
+    ssize_t n;
 
     if ((n = read(fd, c->buf, sizeof(c->buf))) == -1) goto error;
     if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
