@@ -36,6 +36,7 @@ void stats_sort(stats *stats) {
 }
 
 uint64_t stats_min(stats *stats) {
+    if (stats->limit == 0) return 0.0;
     return stats->data[0];
 }
 
