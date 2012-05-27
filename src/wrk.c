@@ -32,6 +32,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    uint64_t sampleint;
 } cfg;
 
 static struct {
@@ -55,6 +56,7 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open   \n"
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
+           "    -s, --sampleint   <n>  Stats sample interval (ms) \n"
            "                                                      \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
@@ -204,7 +206,7 @@ void *thread_main(void *arg) {
         connect_socket(thread, c);
     }
 
-    aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
+    aeCreateTimeEvent(loop, cfg.sampleint, sample_rate, thread, NULL);
     aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
     thread->start = time_us();
@@ -395,6 +397,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+    { "sampleint",   required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -409,8 +412,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->sampleint   = SAMPLE_INTERVAL_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:s:H:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -420,6 +424,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 's':
+                if (scan_metric(optarg, &cfg->sampleint)) return -1;
                 break;
             case 'H':
                 *header++ = optarg;
