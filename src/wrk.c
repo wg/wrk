@@ -19,6 +19,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/uio.h>
+#include <sys/un.h>
 
 #include "aprintf.h"
 #include "stats.h"
@@ -26,12 +27,16 @@
 #include "zmalloc.h"
 #include "tinymt64.h"
 
+#define LOCAL_ADDRSTRLEN (sizeof(struct sockaddr_un) - sizeof(((struct sockaddr_un *)0)->sun_len) - sizeof(((struct sockaddr_un *)0)->sun_family))
+
 static struct config {
     struct addrinfo addr;
+	char sock_path[LOCAL_ADDRSTRLEN];
     uint64_t threads;
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+	uint8_t use_sock;
 } cfg;
 
 static struct {
@@ -55,6 +60,7 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open   \n"
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
+		   "    -s, --socket      <n>  Connect to a local socket  \n"
            "                                                      \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
@@ -75,45 +81,90 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
-        fprintf(stderr, "invalid URL: %s\n", url);
-        exit(1);
-    }
+    char *host = NULL;
+    char *port = NULL;
+    char *service = NULL;
+    char *path = NULL;
 
-    char *host = extract_url_part(url, &parser_url, UF_HOST);
-    char *port = extract_url_part(url, &parser_url, UF_PORT);
-    char *service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *path = &url[parser_url.field_data[UF_PATH].off];
+	if (cfg.use_sock) {
+		struct sockaddr_un un;
+		un.sun_len = sizeof(un);
+		un.sun_family = AF_LOCAL;
+		strlcpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
 
-    struct addrinfo hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
-    };
+		host = cfg.sock_path;
+		port = "0";
+		service = "http";
+		path = url;
 
-    if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
-        const char *msg = gai_strerror(rc);
-        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
+		int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+		if (fd == -1) {
+			fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
+			exit(1);
+		}
 
-    for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-        int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-        if (fd == -1) continue;
-        if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-            if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
-                close(fd);
-                continue;
-            }
-        }
-        close(fd);
-        break;
-    }
+		if (connect(fd, (struct sockaddr *)&un, sizeof(un)) == -1) {
+			fprintf(stderr, "unable to connect socket: %s\n", strerror(errno));
+			close(fd);
+			exit(1);
+		}
 
-    if (addr == NULL) {
-        char *msg = strerror(errno);
-        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
+		close(fd);
+
+		addr = zcalloc(sizeof(*addr));
+		if (addr == NULL) {
+			fprintf(stderr, "unable to allocate address: %s\n", strerror(errno));
+			exit(1);
+		}
+
+		addr->ai_addr = (struct sockaddr *)&un;
+		addr->ai_addrlen = un.sun_len;
+		addr->ai_family = AF_LOCAL;
+		addr->ai_socktype = SOCK_STREAM;
+		addr->ai_protocol = 0;
+		addr->ai_next = NULL;
+	}
+	else {
+		if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
+			fprintf(stderr, "invalid URL: %s\n", url);
+			exit(1);
+		}
+
+		host = extract_url_part(url, &parser_url, UF_HOST);
+		port = extract_url_part(url, &parser_url, UF_PORT);
+		service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
+		path = &url[parser_url.field_data[UF_PATH].off];
+
+		struct addrinfo hints = {
+			.ai_family   = AF_UNSPEC,
+			.ai_socktype = SOCK_STREAM
+		};
+
+		if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
+			const char *msg = gai_strerror(rc);
+			fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+			exit(1);
+		}
+
+		for (addr = addrs; addr != NULL; addr = addr->ai_next) {
+			int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+			if (fd == -1) continue;
+			if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
+				if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
+					close(fd);
+					continue;
+				}
+			}
+			close(fd);
+			break;
+		}
+
+		if (addr == NULL) {
+			char *msg = strerror(errno);
+			fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+			exit(1);
+		}
+	}
 
     cfg.addr     = *addr;
     request.buf  = format_request(host, port, path, headers);
@@ -134,7 +185,7 @@ int main(int argc, char **argv) {
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %zu %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %zd %s\n", i, msg);
             exit(2);
         }
     }
@@ -396,6 +447,7 @@ static struct option longopts[] = {
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "socket",      required_argument, NULL, 's' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -409,8 +461,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+	cfg->use_sock    = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:H:s:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -424,6 +477,15 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'H':
                 *header++ = optarg;
                 break;
+			case 's':
+				if (strlcpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN) < LOCAL_ADDRSTRLEN) {
+					cfg->use_sock = 1;
+				}
+				else {
+					fprintf(stderr, "socket path length must be less than %zd\n", LOCAL_ADDRSTRLEN);
+					return -1;
+				}
+				break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
