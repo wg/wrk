@@ -2,7 +2,7 @@ CFLAGS  := -std=c99 -Wall -O2 -pthread
 LDFLAGS := -pthread
 LIBS    := -lm
 
-SRC  := wrk.c aprintf.c stats.c units.c ae.c zmalloc.c http_parser.c tinymt64.c
+SRC  := wrk.c aprintf.c stats.c units.c ae.c zmalloc.c http_parser.c tinymt64.c urls.c
 BIN  := wrk
 
 ODIR := obj

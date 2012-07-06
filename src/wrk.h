@@ -66,7 +66,6 @@ static uint64_t time_us();
 static uint64_t rand64(tinymt64_t *, uint64_t);
 
 static char *extract_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
-static char *format_request(char *, char *, char *, char **);
 
 static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();

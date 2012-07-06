@@ -26,6 +26,7 @@
 #include "units.h"
 #include "zmalloc.h"
 #include "tinymt64.h"
+#include "urls.h"
 
 #define LOCAL_ADDRSTRLEN (sizeof(struct sockaddr_un) - sizeof(((struct sockaddr_un *)0)->sun_len) - sizeof(((struct sockaddr_un *)0)->sun_family))
 
@@ -39,10 +40,7 @@ static struct config {
 	uint8_t use_sock;
 } cfg;
 
-static struct {
-    size_t size;
-    char *buf;
-} request;
+static urls *requests;
 
 static struct {
     stats *latency;
@@ -167,8 +165,8 @@ int main(int argc, char **argv) {
 	}
 
     cfg.addr     = *addr;
-    request.buf  = format_request(host, port, path, headers);
-    request.size = strlen(request.buf);
+	requests = urls_alloc();
+	urls_add(requests, host, port, path, headers);
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -370,8 +368,9 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
+	url_request *request = urls_request(requests, &c->thread->rand);
 
-    if (write(fd, request.buf, request.size) < request.size) goto error;
+    if (write(fd, request->buf, request->size) < request->size) goto error;
     c->start = time_us();
     aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     aeCreateFileEvent(loop, fd, AE_READABLE, socket_readable, c);
@@ -424,22 +423,6 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
     }
 
     return part;
-}
-
-static char *format_request(char *host, char *port, char *path, char **headers) {
-    char *req = NULL;
-
-    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
-    aprintf(&req, "Host: %s", host);
-    if (port) aprintf(&req, ":%s", port);
-    aprintf(&req, "\r\n");
-
-    for (char **h = headers; *h != NULL; h++) {
-        aprintf(&req, "%s\r\n", *h);
-    }
-
-    aprintf(&req, "\r\n");
-    return req;
 }
 
 static struct option longopts[] = {
