@@ -33,6 +33,7 @@
 static struct config {
     struct addrinfo addr;
 	char sock_path[LOCAL_ADDRSTRLEN];
+	char *paths;
     uint64_t threads;
     uint64_t connections;
     uint64_t requests;
@@ -53,17 +54,18 @@ static const struct http_parser_settings parser_settings = {
 };
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"
-           "  Options:                                            \n"
-           "    -c, --connections <n>  Connections to keep open   \n"
-           "    -r, --requests    <n>  Total requests to make     \n"
-           "    -t, --threads     <n>  Number of threads to use   \n"
-		   "    -s, --socket      <n>  Connect to a local socket  \n"
-           "                                                      \n"
-           "    -H, --header      <h>  Add header to request      \n"
-           "    -v, --version          Print version details      \n"
-           "                                                      \n"
-           "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
+    printf("Usage: wrk <options> <url>                               \n"
+           "  Options:                                               \n"
+           "    -c, --connections <n>  Connections to keep open      \n"
+           "    -r, --requests    <n>  Total requests to make        \n"
+           "    -t, --threads     <n>  Number of threads to use      \n"
+           "    -p, --paths       <n>  File containing path-only urls\n"
+		   "    -s, --socket      <n>  Connect to a local socket     \n"
+           "                                                         \n"
+           "    -H, --header      <h>  Add header to request         \n"
+           "    -v, --version          Print version details         \n"
+           "                                                         \n"
+           "  Numeric arguments may include a SI unit (2k, 2M, 2G)   \n");
 }
 
 int main(int argc, char **argv) {
@@ -166,7 +168,28 @@ int main(int argc, char **argv) {
 
     cfg.addr     = *addr;
 	requests = urls_alloc();
-	urls_add(requests, host, port, path, headers);
+
+	if (cfg.paths) {
+		FILE *file = fopen(cfg.paths, "r");
+		if (file != NULL) {
+			char line[4096];
+			while (fgets(line, sizeof(line), file) != NULL) {
+				size_t len = strlen(line);
+				if (len > 1 && line[0] != '#') {
+					if (line[len-1] == '\n') line[len-1] = '\0';
+					urls_add(requests, host, port, line, headers);
+				}
+			}
+			fclose(file);
+		}
+	}
+	else if (path != NULL && strlen(path) > 0) {
+		urls_add(requests, host, port, path, headers);
+	}
+	else {
+		fprintf(stderr, "no paths provided\n");
+		exit(1);
+	}
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -429,6 +452,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+	{ "paths",       required_argument, NULL, 'p' },
     { "header",      required_argument, NULL, 'H' },
     { "socket",      required_argument, NULL, 's' },
     { "help",        no_argument,       NULL, 'h' },
@@ -446,7 +470,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 	cfg->use_sock    = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:s:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:p:H:s:vh?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -460,6 +484,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'H':
                 *header++ = optarg;
                 break;
+			case 'p':
+				cfg->paths = optarg;
+				break;
 			case 's':
 				if (strlcpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN) < LOCAL_ADDRSTRLEN) {
 					cfg->use_sock = 1;
@@ -481,14 +508,21 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         }
     }
 
-    if (optind == argc || !cfg->threads || !cfg->requests) return -1;
+    if (!cfg->threads || !cfg->requests) return -1;
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
     }
 
-    *url    = argv[optind];
+	if (optind == argc) {
+		if (cfg->use_sock) *url = NULL;
+		else return -1;
+	}
+	else {
+		*url = argv[optind];
+	}
+
     *header = NULL;
 
     return 0;
