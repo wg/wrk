@@ -28,10 +28,12 @@
 
 static struct config {
     struct addrinfo addr;
+    struct addrinfo addrf;
     uint64_t threads;
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    char     *source_addr;
 } cfg;
 
 static struct {
@@ -55,6 +57,7 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open   \n"
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
+           "    -s, --source-addr <a>  Use this address as source \n"
            "                                                      \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
@@ -63,7 +66,7 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-    struct addrinfo *addrs, *addr;
+    struct addrinfo *addrs, *addr , *addrf ;
     struct http_parser_url parser_url;
     char *url, **headers;
     int rc;
@@ -95,10 +98,24 @@ int main(int argc, char **argv) {
         fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
         exit(1);
     }
+    if ( cfg.source_addr ) {
+	if ((rc = getaddrinfo(cfg.source_addr,NULL, &hints, &addrf)) != 0) {
+	    const char *msg = gai_strerror(rc);
+	    fprintf(stderr, "unable to resolve src %s ( %s ) \n", cfg.source_addr , msg);
+	    exit(1);
+	}
+    }
 
     for (addr = addrs; addr != NULL; addr = addr->ai_next) {
         int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
         if (fd == -1) continue;
+	if ( cfg.source_addr ) {
+	  if ( ( rc = bind ( fd, addrf->ai_addr, addrf->ai_addrlen) ) != 0 ) {
+	    const char *msg = gai_strerror(rc);
+	    fprintf(stderr, "unable to bind src %s ( %s ) \n", cfg.source_addr , msg);
+	    exit(1);
+	  }
+	}
         if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
             if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
                 close(fd);
@@ -116,6 +133,9 @@ int main(int argc, char **argv) {
     }
 
     cfg.addr     = *addr;
+    if ( cfg.source_addr ) {
+      cfg.addrf     = *addrf;
+    }
     request.buf  = format_request(host, port, path, headers);
     request.size = strlen(request.buf);
 
@@ -217,11 +237,19 @@ void *thread_main(void *arg) {
 }
 
 static int connect_socket(thread *thread, connection *c) {
-    struct addrinfo addr = cfg.addr;
+    struct addrinfo addr  = cfg.addr;
+    struct addrinfo addrf = cfg.addrf;
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
 
     fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+
+    if ( cfg.source_addr ) {
+      if ( bind ( fd, addrf.ai_addr, addrf.ai_addrlen) == -1 ) {
+	thread->errors.connect++;
+	goto error;
+      }
+    }
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -395,6 +423,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+    { "source-addr", required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -410,7 +439,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:s:r:H:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -420,6 +449,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 's':
+	        cfg->source_addr=strdup(optarg) ;
                 break;
             case 'H':
                 *header++ = optarg;
