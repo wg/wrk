@@ -8,13 +8,13 @@
 #include "tinymt64.h"
 
 typedef struct {
-	size_t size;
-	char *buf;
+    size_t size;
+    char *buf;
 } url_request;
 
 typedef struct {
-	uint64_t count;
-	url_request **requests;
+    uint64_t count;
+    url_request **requests;
 } urls;
 
 urls *urls_alloc(void);

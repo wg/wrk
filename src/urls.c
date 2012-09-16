@@ -11,21 +11,21 @@
 
 static char *format_request(char *host, char *port, char *path, char **headers) {
     char *req = NULL;
-	uint8_t has_host = 0;
+    uint8_t has_host = 0;
 
     aprintf(&req, "GET %s HTTP/1.1\r\n", path);
 
     for (char **h = headers; *h != NULL; h++) {
-		if (strncasecmp(*h, "Host:", strlen("Host:")) == 0)
-			has_host = 1;
+        if (strncasecmp(*h, "Host:", strlen("Host:")) == 0)
+            has_host = 1;
         aprintf(&req, "%s\r\n", *h);
     }
 
-	if (!has_host) {
-		aprintf(&req, "Host: %s", host);
-		if (port) aprintf(&req, ":%s", port);
-		aprintf(&req, "\r\n");
-	}
+    if (!has_host) {
+        aprintf(&req, "Host: %s", host);
+        if (port) aprintf(&req, ":%s", port);
+        aprintf(&req, "\r\n");
+    }
 
     aprintf(&req, "\r\n");
     return req;
