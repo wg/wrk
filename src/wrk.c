@@ -28,7 +28,11 @@
 #include "tinymt64.h"
 #include "urls.h"
 
+#ifdef BSD
 #define LOCAL_ADDRSTRLEN (sizeof(struct sockaddr_un) - sizeof(((struct sockaddr_un *)0)->sun_len) - sizeof(((struct sockaddr_un *)0)->sun_family))
+#elif __linux
+#define LOCAL_ADDRSTRLEN sizeof(((struct sockaddr_un *)0)->sun_path)
+#endif
 
 static struct config {
     struct addrinfo addr;
@@ -87,10 +91,13 @@ int main(int argc, char **argv) {
     char *path = NULL;
 
 	if (cfg.use_sock) {
+        /* Unix socket */
 		struct sockaddr_un un;
+#ifdef BSD
 		un.sun_len = sizeof(un);
+#endif
 		un.sun_family = AF_LOCAL;
-		strlcpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
+		strncpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
 
 		host = cfg.sock_path;
 		port = "0";
@@ -118,13 +125,14 @@ int main(int argc, char **argv) {
 		}
 
 		addr->ai_addr = (struct sockaddr *)&un;
-		addr->ai_addrlen = un.sun_len;
+		addr->ai_addrlen =  sizeof(un);
 		addr->ai_family = AF_LOCAL;
 		addr->ai_socktype = SOCK_STREAM;
 		addr->ai_protocol = 0;
 		addr->ai_next = NULL;
 	}
 	else {
+        /* TCP socket */
 		if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
 			fprintf(stderr, "invalid URL: %s\n", url);
 			exit(1);
