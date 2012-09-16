@@ -2,7 +2,7 @@
 #define URLS_H
 
 #ifndef URLS_MAX
-#define URLS_MAX 1024
+#define URLS_MAX 10240
 #endif
 
 #include "tinymt64.h"
@@ -14,7 +14,7 @@ typedef struct {
 
 typedef struct {
 	uint64_t count;
-	url_request *requests[URLS_MAX];
+	url_request **requests;
 } urls;
 
 urls *urls_alloc(void);

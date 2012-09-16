@@ -179,16 +179,25 @@ int main(int argc, char **argv) {
 
 	if (cfg.paths) {
 		FILE *file = fopen(cfg.paths, "r");
+        int urls = 1;
+        int lines = 1;
 		if (file != NULL) {
 			char line[4096];
 			while (fgets(line, sizeof(line), file) != NULL) {
 				size_t len = strlen(line);
 				if (len > 1 && line[0] != '#') {
 					if (line[len-1] == '\n') line[len-1] = '\0';
-					urls_add(requests, host, port, line, headers);
+					if(urls_add(requests, host, port, line, headers)){
+                        fprintf(stderr, "error importing urls (%s) from file %s:%i\n",
+                                line, cfg.paths, lines);
+                        exit(1);
+                    }
+                    urls++;
 				}
+                lines++;
 			}
 			fclose(file);
+            printf("%i urls imported\n", urls);
 		}
 	}
 	else if (path != NULL && strlen(path) > 0) {
@@ -469,7 +478,7 @@ static struct option longopts[] = {
 };
 
 static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
-    char c, **header = headers;
+    char c, *paths, **header = headers;
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
@@ -493,17 +502,19 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 *header++ = optarg;
                 break;
 			case 'p':
-				cfg->paths = optarg;
+                paths = zmalloc(strlen(optarg));
+				cfg->paths = strcpy(paths, optarg);
 				break;
 			case 's':
-				if (strlcpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN) < LOCAL_ADDRSTRLEN) {
-					cfg->use_sock = 1;
-				}
-				else {
-					fprintf(stderr, "socket path length must be less than %zd\n", LOCAL_ADDRSTRLEN);
-					return -1;
-				}
-				break;
+                if (strlen(optarg) < LOCAL_ADDRSTRLEN) {
+                    strncpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN);
+                    cfg->use_sock = 1;
+                }
+                else {
+                    fprintf(stderr, "socket path length must be less than %zd\n", LOCAL_ADDRSTRLEN);
+                    return -1;
+                }
+                break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");

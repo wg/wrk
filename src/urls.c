@@ -1,6 +1,8 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <stdio.h>
 #include <math.h>
 
 #include "urls.h"
@@ -36,6 +38,7 @@ static void url_request_free(url_request *req) {
 
 urls *urls_alloc() {
 	urls *urls = zcalloc(sizeof(urls));
+    urls->requests = malloc(sizeof(struct url_request *) * URLS_MAX);
 	urls->count = 0;
 	return urls;
 }
@@ -52,7 +55,10 @@ uint64_t urls_count(urls *urls) {
 }
 
 int urls_add(urls *urls, char *host, char *port, char *path, char **headers) {
-	if (urls->count >= URLS_MAX) return -1;
+	if (urls->count >= URLS_MAX){
+        fprintf(stderr, "Too many urls (max %i)\n", URLS_MAX);
+        return -2;
+    }
 
 	url_request *req = zcalloc(sizeof(url_request));
 	if (req == NULL) return -1;
