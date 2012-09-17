@@ -177,8 +177,8 @@ int main(int argc, char **argv) {
     if (cfg.paths) {
         FILE *file = fopen(cfg.paths, "r");
         char line[4096];
-        uint64_t urls = 1;
-        uint64_t lines = 1;
+        uint64_t urls = 0;
+        uint64_t lines = 0;
 
         if (file == NULL) {
             fprintf(stderr, "Cant open file %s\n", cfg.paths);
@@ -190,13 +190,18 @@ int main(int argc, char **argv) {
                 if (line[len-1] == '\n') line[len-1] = '\0';
                 fflush(stdout);
                 if(urls_add(host, port, line, headers)){
-                    fprintf(stderr, "error importing urls (%s) from file %s:%"PRIu64"\n",
-                            line, cfg.paths, lines);
+                    fprintf(stderr, "Error importing urls (%s) from file %s:%"PRIu64"\n",
+                            line, cfg.paths, lines + 1);
                     exit(1);
                 }
                 urls++;
             }
             lines++;
+        }
+        if (!urls) {
+            fprintf(stderr, "Error importing urls. File '%s' is empty or all lines"
+                    " are commented-out\n", cfg.paths);
+            exit(1);
         }
         fclose(file);
         printf("%"PRIu64" urls imported\n", urls);
