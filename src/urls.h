@@ -12,15 +12,8 @@ typedef struct {
     char *buf;
 } url_request;
 
-typedef struct {
-    uint64_t count;
-    url_request **requests;
-} urls;
-
-urls *urls_alloc(void);
-void urls_free(urls *);
-uint64_t urls_count(urls *);
-int urls_add(urls *, char *host, char *port, char *path, char **headers);
-url_request *urls_request(urls *, tinymt64_t *);
+uint64_t urls_count();
+int urls_add(char *host, char *port, char *path, char **headers);
+url_request *urls_request(tinymt64_t *);
 
 #endif /* URLS_H */

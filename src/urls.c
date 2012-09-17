@@ -9,6 +9,13 @@
 #include "aprintf.h"
 #include "zmalloc.h"
 
+
+static struct {
+    uint64_t count;
+    url_request *requests[URLS_MAX];
+} urls2;
+
+
 static char *format_request(char *host, char *port, char *path, char **headers) {
     char *req = NULL;
     uint8_t has_host = 0;
@@ -31,58 +38,39 @@ static char *format_request(char *host, char *port, char *path, char **headers) 
     return req;
 }
 
-static void url_request_free(url_request *req) {
-	if (req->buf) zfree(req->buf);
-	zfree(req);
+uint64_t urls_count() {
+    return urls2.count;
 }
 
-urls *urls_alloc() {
-	urls *urls = zcalloc(sizeof(urls));
-    urls->requests = malloc(sizeof(struct url_request *) * URLS_MAX);
-	urls->count = 0;
-	return urls;
-}
-
-void urls_free(urls *urls) {
-	for (uint64_t i = 0; i < urls->count; i++) {
-		url_request_free(urls->requests[i]);
-	}
-	zfree(urls);
-}
-
-uint64_t urls_count(urls *urls) {
-	return urls->count;
-}
-
-int urls_add(urls *urls, char *host, char *port, char *path, char **headers) {
-	if (urls->count >= URLS_MAX){
+int urls_add(char *host, char *port, char *path, char **headers) {
+    url_request *req;
+    if (urls2.count >= URLS_MAX){
         fprintf(stderr, "Too many urls (max %i)\n", URLS_MAX);
         return -2;
     }
 
-	url_request *req = zcalloc(sizeof(url_request));
-	if (req == NULL) return -1;
+    req = zcalloc(sizeof(url_request));
+    if (req == NULL) return -1;
 
-	req->buf = format_request(host, port, path, headers);
-	req->size = req->buf ? strlen(req->buf) : 0;
-	if (req->size == 0) {
-		url_request_free(req);
-		return -1;
-	}
+    req->buf = format_request(host, port, path, headers);
+    req->size = req->buf ? strlen(req->buf) : 0;
+    if (req->size == 0) {
+        return -1;
+    }
 
-	urls->requests[urls->count] = req;
-	urls->count++;
+    urls2.requests[urls2.count] = req;
+    urls2.count++;
 
-	return 0;
+    return 0;
 }
 
-url_request *urls_request(urls *urls, tinymt64_t *rand) {
-	switch (urls->count) {
-		case 0: return NULL;
-		case 1: return urls->requests[0];
-	}
+url_request *urls_request(tinymt64_t *rand) {
+    switch (urls2.count) {
+        case 0: return NULL;
+        case 1: return urls2.requests[0];
+    }
 
-	uint64_t n = tinymt64_generate_uint64(rand);
-	return urls->requests[n % urls->count];
+    uint64_t n = tinymt64_generate_uint64(rand);
+    return urls2.requests[n % urls2.count];
 }
 

@@ -36,16 +36,14 @@
 
 static struct config {
     struct addrinfo addr;
-	char sock_path[LOCAL_ADDRSTRLEN];
-	char *paths;
+    char sock_path[LOCAL_ADDRSTRLEN];
+    char *paths;
     uint64_t threads;
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
-	uint8_t use_sock;
+    uint8_t use_sock;
 } cfg;
-
-static urls *requests;
 
 static struct {
     stats *latency;
@@ -64,7 +62,7 @@ static void usage() {
            "    -r, --requests    <n>  Total requests to make        \n"
            "    -t, --threads     <n>  Number of threads to use      \n"
            "    -p, --paths       <n>  File containing path-only urls\n"
-		   "    -s, --socket      <n>  Connect to a local socket     \n"
+           "    -s, --socket      <n>  Connect to a local socket     \n"
            "                                                         \n"
            "    -H, --header      <h>  Add header to request         \n"
            "    -v, --version          Print version details         \n"
@@ -90,123 +88,127 @@ int main(int argc, char **argv) {
     char *service = NULL;
     char *path = NULL;
 
-	if (cfg.use_sock) {
+    if (cfg.use_sock) {
         /* Unix socket */
-		struct sockaddr_un un;
+        struct sockaddr_un un;
 #ifdef BSD
-		un.sun_len = sizeof(un);
+        un.sun_len = sizeof(un);
 #endif
-		un.sun_family = AF_LOCAL;
-		strncpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
+        un.sun_family = AF_LOCAL;
+        strncpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
 
-		host = cfg.sock_path;
-		port = "0";
-		service = "http";
-		path = url;
+        host = cfg.sock_path;
+        port = "0";
+        service = "http";
+        path = url;
 
-		int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
-		if (fd == -1) {
-			fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
-			exit(1);
-		}
+        int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+        if (fd == -1) {
+            fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
+            exit(1);
+        }
 
-		if (connect(fd, (struct sockaddr *)&un, sizeof(un)) == -1) {
-			fprintf(stderr, "unable to connect socket: %s\n", strerror(errno));
-			close(fd);
-			exit(1);
-		}
+        if (connect(fd, (struct sockaddr *)&un, sizeof(un)) == -1) {
+            fprintf(stderr, "unable to connect socket: %s\n", strerror(errno));
+            close(fd);
+            exit(1);
+        }
 
-		close(fd);
+        close(fd);
 
-		addr = zcalloc(sizeof(*addr));
-		if (addr == NULL) {
-			fprintf(stderr, "unable to allocate address: %s\n", strerror(errno));
-			exit(1);
-		}
+        addr = zcalloc(sizeof(*addr));
+        if (addr == NULL) {
+            fprintf(stderr, "unable to allocate address: %s\n", strerror(errno));
+            exit(1);
+        }
 
-		addr->ai_addr = (struct sockaddr *)&un;
-		addr->ai_addrlen =  sizeof(un);
-		addr->ai_family = AF_LOCAL;
-		addr->ai_socktype = SOCK_STREAM;
-		addr->ai_protocol = 0;
-		addr->ai_next = NULL;
-	}
-	else {
+        addr->ai_addr = (struct sockaddr *)&un;
+        addr->ai_addrlen =  sizeof(un);
+        addr->ai_family = AF_LOCAL;
+        addr->ai_socktype = SOCK_STREAM;
+        addr->ai_protocol = 0;
+        addr->ai_next = NULL;
+    }
+    else {
         /* TCP socket */
-		if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
-			fprintf(stderr, "invalid URL: %s\n", url);
-			exit(1);
-		}
+        if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
+            fprintf(stderr, "invalid URL: %s\n", url);
+            exit(1);
+        }
 
-		host = extract_url_part(url, &parser_url, UF_HOST);
-		port = extract_url_part(url, &parser_url, UF_PORT);
-		service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
-		path = &url[parser_url.field_data[UF_PATH].off];
+        host = extract_url_part(url, &parser_url, UF_HOST);
+        port = extract_url_part(url, &parser_url, UF_PORT);
+        service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
+        path = &url[parser_url.field_data[UF_PATH].off];
 
-		struct addrinfo hints = {
-			.ai_family   = AF_UNSPEC,
-			.ai_socktype = SOCK_STREAM
-		};
+        struct addrinfo hints = {
+            .ai_family   = AF_UNSPEC,
+            .ai_socktype = SOCK_STREAM
+        };
 
-		if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
-			const char *msg = gai_strerror(rc);
-			fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-			exit(1);
-		}
+        if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
+            const char *msg = gai_strerror(rc);
+            fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+            exit(1);
+        }
 
-		for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-			int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-			if (fd == -1) continue;
-			if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-				if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
-					close(fd);
-					continue;
-				}
-			}
-			close(fd);
-			break;
-		}
+        for (addr = addrs; addr != NULL; addr = addr->ai_next) {
+            int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+            if (fd == -1) continue;
+            if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
+                if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
+                    close(fd);
+                    continue;
+                }
+            }
+            close(fd);
+            break;
+        }
 
-		if (addr == NULL) {
-			char *msg = strerror(errno);
-			fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-			exit(1);
-		}
-	}
+        if (addr == NULL) {
+            char *msg = strerror(errno);
+            fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+            exit(1);
+        }
+    }
 
     cfg.addr     = *addr;
-	requests = urls_alloc();
 
-	if (cfg.paths) {
-		FILE *file = fopen(cfg.paths, "r");
-        int urls = 1;
-        int lines = 1;
-		if (file != NULL) {
-			char line[4096];
-			while (fgets(line, sizeof(line), file) != NULL) {
-				size_t len = strlen(line);
-				if (len > 1 && line[0] != '#') {
-					if (line[len-1] == '\n') line[len-1] = '\0';
-					if(urls_add(requests, host, port, line, headers)){
-                        fprintf(stderr, "error importing urls (%s) from file %s:%i\n",
-                                line, cfg.paths, lines);
-                        exit(1);
-                    }
-                    urls++;
-				}
-                lines++;
-			}
-			fclose(file);
-            printf("%i urls imported\n", urls);
-		}
-	}
-	else if (path != NULL && strlen(path) > 0) {
-		urls_add(requests, host, port, path, headers);
-	}
-	else {
-		fprintf(stderr, "no paths provided\n");
-		exit(1);
-	}
+    if (cfg.paths) {
+        FILE *file = fopen(cfg.paths, "r");
+        char line[4096];
+        uint64_t urls = 1;
+        uint64_t lines = 1;
+
+        if (file == NULL) {
+            fprintf(stderr, "Cant open file %s\n", cfg.paths);
+            exit(1);
+        }
+        while (fgets(line, sizeof(line), file) != NULL) {
+            size_t len = strlen(line);
+            if (len > 1 && line[0] != '#') {
+                if (line[len-1] == '\n') line[len-1] = '\0';
+                fflush(stdout);
+                if(urls_add(host, port, line, headers)){
+                    fprintf(stderr, "error importing urls (%s) from file %s:%"PRIu64"\n",
+                            line, cfg.paths, lines);
+                    exit(1);
+                }
+                urls++;
+            }
+            lines++;
+        }
+        fclose(file);
+        printf("%"PRIu64" urls imported\n", urls);
+
+    }
+    else if (path != NULL && strlen(path) > 0) {
+        urls_add(host, port, path, headers);
+    }
+    else {
+        fprintf(stderr, "no paths provided\n");
+        exit(1);
+    }
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -214,16 +216,16 @@ int main(int argc, char **argv) {
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
-    uint64_t requests    = cfg.requests    / cfg.threads;
+    uint64_t requests_cnt    = cfg.requests    / cfg.threads;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         t->connections = connections;
-        t->requests    = requests;
+        t->requests    = requests_cnt;
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %zd %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
             exit(2);
         }
     }
@@ -408,7 +410,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-	url_request *request = urls_request(requests, &c->thread->rand);
+    url_request *request = urls_request(&c->thread->rand);
 
     if (write(fd, request->buf, request->size) < request->size) goto error;
     c->start = time_us();
@@ -469,7 +471,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
-	{ "paths",       required_argument, NULL, 'p' },
+    { "paths",       required_argument, NULL, 'p' },
     { "header",      required_argument, NULL, 'H' },
     { "socket",      required_argument, NULL, 's' },
     { "help",        no_argument,       NULL, 'h' },
@@ -485,7 +487,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
-	cfg->use_sock    = 0;
+    cfg->use_sock    = 0;
 
     while ((c = getopt_long(argc, argv, "t:c:r:p:H:s:vh?", longopts, NULL)) != -1) {
         switch (c) {
@@ -501,11 +503,11 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'H':
                 *header++ = optarg;
                 break;
-			case 'p':
-                paths = zmalloc(strlen(optarg));
-				cfg->paths = strcpy(paths, optarg);
-				break;
-			case 's':
+            case 'p':
+                paths = zmalloc(strlen(optarg) + 1);
+                cfg->paths = strcpy(paths, optarg);
+                break;
+            case 's':
                 if (strlen(optarg) < LOCAL_ADDRSTRLEN) {
                     strncpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN);
                     cfg->use_sock = 1;
@@ -534,13 +536,13 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         return -1;
     }
 
-	if (optind == argc) {
-		if (cfg->use_sock) *url = NULL;
-		else return -1;
-	}
-	else {
-		*url = argv[optind];
-	}
+    if (optind == argc) {
+        if (cfg->use_sock) *url = NULL;
+        else return -1;
+    }
+    else {
+        *url = argv[optind];
+    }
 
     *header = NULL;
 
