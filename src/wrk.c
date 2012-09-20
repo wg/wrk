@@ -188,7 +188,6 @@ int main(int argc, char **argv) {
             size_t len = strlen(line);
             if (len > 1 && line[0] != '#') {
                 if (line[len-1] == '\n') line[len-1] = '\0';
-                fflush(stdout);
                 if(urls_add(host, port, line, headers)){
                     fprintf(stderr, "Error importing urls (%s) from file %s:%"PRIu64"\n",
                             line, cfg.paths, lines + 1);

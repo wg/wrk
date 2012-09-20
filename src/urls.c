@@ -12,7 +12,8 @@
 
 static struct {
     uint64_t count;
-    url_request *requests[URLS_MAX];
+    size_t size;
+    url_request **requests;
 } urls2;
 
 
@@ -44,9 +45,15 @@ uint64_t urls_count() {
 
 int urls_add(char *host, char *port, char *path, char **headers) {
     url_request *req;
-    if (urls2.count >= URLS_MAX){
-        fprintf(stderr, "Too many urls (max %i)\n", URLS_MAX);
-        return -2;
+    if (urls2.count == urls2.size) {
+        size_t new_size = urls2.size + URLS_INC_STEP;
+        if (new_size > URLS_MAX) {
+            fprintf(stderr, "Too many urls (max %i)\n", URLS_MAX);
+            return -2;
+        }
+        urls2.requests = zrealloc(urls2.requests,
+                                  new_size * sizeof(url_request *));
+        urls2.size = new_size;
     }
 
     req = zcalloc(sizeof(url_request));

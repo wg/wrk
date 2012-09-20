@@ -2,7 +2,11 @@
 #define URLS_H
 
 #ifndef URLS_MAX
-#define URLS_MAX 10240
+#define URLS_MAX 100 * 1024 * 1024
+#endif
+
+#ifndef URLS_INC_STEP
+#define URLS_INC_STEP 1024
 #endif
 
 #include "tinymt64.h"
