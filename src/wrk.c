@@ -432,7 +432,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     ssize_t n;
 
-    if ((n = read(fd, c->buf, sizeof(c->buf))) == -1) goto error;
+    if ((n = read(fd, c->buf, sizeof(c->buf))) < 1) goto error;
     if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
     c->thread->bytes += n;
 
