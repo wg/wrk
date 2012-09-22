@@ -244,8 +244,12 @@ int main(int argc, char **argv) {
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
-        pthread_join(t->thread, NULL);
 
+#ifdef __linux
+        await_thread(t->thread, threads);
+#else
+        pthread_join(t->thread, NULL);
+#endif
         complete += t->complete;
         bytes    += t->bytes;
 
@@ -580,4 +584,30 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     print_units(stdev, fmt, 10);
     print_units(max,   fmt, 9);
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+}
+
+static void progress_report(thread *threads){
+    uint64_t complete=0;
+
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        complete += threads[i].complete;
+    }
+    printf("Completed %"PRIu64" requests\n", complete);
+}
+
+static int await_thread(pthread_t t, thread *threads) {
+    struct timespec ts;
+    int s;
+
+    while (1) {
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 5;
+
+        s = pthread_timedjoin_np(t, NULL, &ts);
+        if (s == ETIMEDOUT) {
+            progress_report(threads);
+        } else {
+            return s;
+        }
+    }
 }

@@ -1,6 +1,8 @@
 #ifndef WRK_H
 #define WRK_H
 
+#define _GNU_SOURCE
+
 #include "config.h"
 #include <pthread.h>
 #include <inttypes.h>
@@ -70,5 +72,7 @@ static char *extract_url_part(char *, struct http_parser_url *, enum http_parser
 static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
+
+static int await_thread(pthread_t, thread *);
 
 #endif /* WRK_H */
