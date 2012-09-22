@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,6 +52,9 @@ static struct {
     pthread_mutex_t mutex;
 } statistics;
 
+/* global for signal handling */
+static thread *threads;
+
 static const struct http_parser_settings parser_settings = {
     .on_message_complete = request_complete
 };
@@ -73,6 +77,7 @@ static void usage() {
 int main(int argc, char **argv) {
     struct addrinfo *addrs, *addr;
     struct http_parser_url parser_url;
+    struct sigaction sigint_action;
     char *url, **headers;
     int rc;
 
@@ -218,7 +223,7 @@ int main(int argc, char **argv) {
     statistics.latency  = stats_alloc(SAMPLES);
     statistics.requests = stats_alloc(SAMPLES);
 
-    thread *threads = zcalloc(cfg.threads * sizeof(thread));
+    threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t requests_cnt    = cfg.requests    / cfg.threads;
 
@@ -241,6 +246,13 @@ int main(int argc, char **argv) {
     uint64_t complete = 0;
     uint64_t bytes    = 0;
     errors errors     = { 0 };
+
+    sigint_action.sa_handler = &sig_handler;
+    sigemptyset (&sigint_action.sa_mask);
+    /* reset handler in case when pthread_cancel didn't stop
+       threads for some reason */
+    sigint_action.sa_flags = SA_RESETHAND;
+    sigaction(SIGINT, &sigint_action, NULL);
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
@@ -285,6 +297,14 @@ int main(int argc, char **argv) {
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
     return 0;
+}
+
+/* Stop threads, so main thread can print stats when join's return */
+static void sig_handler(int signum) {
+    printf("interrupted\n");
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        if(pthread_cancel(threads[i].thread)) exit(1);
+    }
 }
 
 void *thread_main(void *arg) {
@@ -595,6 +615,7 @@ static void progress_report(thread *threads){
     printf("Completed %"PRIu64" requests\n", complete);
 }
 
+/* Will call progress_report every 5 seconds until the thread is finished */
 static int await_thread(pthread_t t, thread *threads) {
     struct timespec ts;
     int s;
