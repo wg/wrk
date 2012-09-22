@@ -65,10 +65,10 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open      \n"
            "    -r, --requests    <n>  Total requests to make        \n"
            "    -t, --threads     <n>  Number of threads to use      \n"
-           "    -p, --paths       <n>  File containing path-only urls\n"
-           "    -s, --socket      <n>  Connect to a local socket     \n"
+           "    -p, --paths       <s>  File containing path-only urls\n"
+           "    -s, --socket      <s>  Connect to a local socket     \n"
            "                                                         \n"
-           "    -H, --header      <h>  Add header to request         \n"
+           "    -H, --header      <s>  Add header to request         \n"
            "    -v, --version          Print version details         \n"
            "                                                         \n"
            "  Numeric arguments may include a SI unit (2k, 2M, 2G)   \n");
@@ -301,9 +301,11 @@ int main(int argc, char **argv) {
 
 /* Stop threads, so main thread can print stats when join's return */
 static void sig_handler(int signum) {
+    int s;
     printf("interrupted\n");
     for (uint64_t i = 0; i < cfg.threads; i++) {
-        if(pthread_cancel(threads[i].thread)) exit(1);
+        s = pthread_cancel(threads[i].thread);
+        if(s && (s != ESRCH)) exit(s);
     }
 }
 
@@ -430,6 +432,8 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         if (maxAge > c->start) {
             thread->errors.timeout++;
+            /* maybe reconnect socket in this case?
+               reconnect_socket(thread, c); */
         }
     }
 
