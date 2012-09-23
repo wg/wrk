@@ -432,8 +432,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         if (maxAge > c->start) {
             thread->errors.timeout++;
-            /* maybe reconnect socket in this case?
-               reconnect_socket(thread, c); */
+            reconnect_socket(thread, c);
         }
     }
 
