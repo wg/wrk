@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     char *url, **headers;
     int rc;
 
-    headers = zmalloc((argc / 2) * sizeof(char *));
+    headers = zmalloc(argc * sizeof(char *));
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
