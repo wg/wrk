@@ -43,6 +43,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    uint8_t use_keepalive;
     uint8_t use_sock;
 } cfg;
 
@@ -65,6 +66,9 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open      \n"
            "    -r, --requests    <n>  Total requests to make        \n"
            "    -t, --threads     <n>  Number of threads to use      \n"
+           "    -T, --timeout     <n>  Number of seconds to wait and read a full\n"
+           "                           response from the server, default is 2\n"
+           "    -k, --keepalive        Use HTTP/1.1 keep-alive       \n"
            "    -p, --paths       <s>  File containing path-only urls\n"
            "    -s, --socket      <s>  Connect to a local socket     \n"
            "                                                         \n"
@@ -81,7 +85,8 @@ int main(int argc, char **argv) {
     char *url, **headers;
     int rc;
 
-    headers = zmalloc(argc * sizeof(char *));
+    /* +1 for possible Connection: keep-alive */
+    headers = zmalloc((argc + 1) * sizeof(char *));
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
@@ -244,6 +249,7 @@ int main(int argc, char **argv) {
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
+    uint64_t conns = 0;
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
@@ -264,6 +270,7 @@ int main(int argc, char **argv) {
 #endif
         complete += t->complete;
         bytes    += t->bytes;
+        conns    += t->conn_attempts;
 
         errors.connect += t->errors.connect;
         errors.read    += t->errors.read;
@@ -283,7 +290,8 @@ int main(int argc, char **argv) {
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    printf("  %"PRIu64" requests, %"PRIu64" sock connections in %s, %sB read\n",
+           complete, conns, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -325,6 +333,7 @@ void *thread_main(void *arg) {
         connect_socket(thread, c);
     }
 
+    /* TODO: use cfg.timeout instead of TIMEOUT_INTERVAL_MS */
     aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
     aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
@@ -347,7 +356,11 @@ static int connect_socket(thread *thread, connection *c) {
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
+    thread->conn_attempts++;
+
     if (connect(fd, addr.ai_addr, addr.ai_addrlen) == -1) {
+        /* TODO: special handling for EADDRNOTAVAIL (has no free
+           ephemeral ports) */
         if (errno != EINPROGRESS) {
             thread->errors.connect++;
             goto error;
@@ -408,7 +421,7 @@ static int request_complete(http_parser *parser) {
     }
 
     c->latency = time_us() - c->start;
-    if (!http_should_keep_alive(parser)) goto reconnect;
+    if (!(cfg.use_keepalive && http_should_keep_alive(parser))) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
     aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
@@ -502,6 +515,8 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+    { "timeout",     required_argument, NULL, 'T' },
+    { "keepalive",   no_argument,       NULL, 'k' },
     { "paths",       required_argument, NULL, 'p' },
     { "header",      required_argument, NULL, 'H' },
     { "socket",      required_argument, NULL, 's' },
@@ -518,18 +533,27 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->use_keepalive = 0;
     cfg->use_sock    = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:p:H:s:vh?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:p:H:s:T:kvh?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
+                break;
+            case 'T':
+                if (scan_metric(optarg, &cfg->timeout)) return -1;
+                cfg->timeout *= 1000; /* milliseconds */
                 break;
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'k':
+                cfg->use_keepalive = 1;
+                *header++ = "Connection: keep-alive";
                 break;
             case 'H':
                 *header++ = optarg;

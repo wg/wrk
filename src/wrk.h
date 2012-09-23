@@ -33,6 +33,7 @@ typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     uint64_t connections;
+    uint64_t conn_attempts;
     uint64_t requests;
     uint64_t complete;
     uint64_t bytes;
