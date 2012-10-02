@@ -16,6 +16,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/uio.h>
@@ -25,6 +26,8 @@
 #include "units.h"
 #include "zmalloc.h"
 #include "tinymt64.h"
+
+static volatile sig_atomic_t should_exit = 0;
 
 static struct config {
     struct addrinfo addr;
@@ -60,6 +63,12 @@ static void usage() {
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
+}
+
+static void handle_signal(int sig) {
+    // set the exit flag to indicate to the child threads
+    // that they should exit.
+    should_exit = 1;
 }
 
 int main(int argc, char **argv) {
@@ -115,6 +124,15 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    struct sigaction action = {
+        .sa_handler = &handle_signal,
+        .sa_flags = SA_RESETHAND | SA_RESTART // reset to default and restart interruptable calls.
+    };
+    sigemptyset(&action.sa_mask);
+
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGTERM, &action, NULL);
+
     cfg.addr     = *addr;
     request.buf  = format_request(host, port, path, headers);
     request.size = strlen(request.buf);
@@ -166,6 +184,9 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
+    if (should_exit) {
+        printf("Interrupted: Completed only %s requests of %s\n", format_metric(complete), format_metric(cfg.requests));
+    }
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
@@ -281,7 +302,7 @@ static int request_complete(http_parser *parser) {
         thread->errors.status++;
     }
 
-    if (++thread->complete >= thread->requests) {
+    if (++thread->complete >= thread->requests || should_exit) {
         aeStop(thread->loop);
         goto done;
     }
