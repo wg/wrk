@@ -30,6 +30,7 @@ static struct config {
     struct addrinfo addr;
     uint64_t threads;
     uint64_t connections;
+    uint64_t protocol;
     uint64_t requests;
     uint64_t timeout;
 } cfg;
@@ -55,6 +56,7 @@ static void usage() {
            "    -c, --connections <n>  Connections to keep open   \n"
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
+           "    -p, --protocol    <n>  default: 1 (HTTP/1.1)      \n"
            "                                                      \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
@@ -116,7 +118,7 @@ int main(int argc, char **argv) {
     }
 
     cfg.addr     = *addr;
-    request.buf  = format_request(host, port, path, headers);
+    request.buf  = format_request(cfg.protocol, host, port, path, headers);
     request.size = strlen(request.buf);
 
     pthread_mutex_init(&statistics.mutex, NULL);
@@ -134,12 +136,12 @@ int main(int argc, char **argv) {
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %zu %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
             exit(2);
         }
     }
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
+    printf("Making %"PRIu64" requests (HTTP/1.%"PRIu64") to %s\n", cfg.requests, cfg.protocol, url);
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
 
     uint64_t start    = time_us();
@@ -375,10 +377,10 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
     return part;
 }
 
-static char *format_request(char *host, char *port, char *path, char **headers) {
+static char *format_request(int protocol, char *host, char *port, char *path, char **headers) {
     char *req = NULL;
 
-    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
+    aprintf(&req, "GET %s HTTP/1.%d\r\n", path, protocol);
     aprintf(&req, "Host: %s", host);
     if (port) aprintf(&req, ":%s", port);
     aprintf(&req, "\r\n");
@@ -396,6 +398,7 @@ static struct option longopts[] = {
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "protocol",    required_argument, NULL, 'p' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -408,9 +411,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->threads     = 2;
     cfg->connections = 10;
     cfg->requests    = 100;
+    cfg->protocol    = 1;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:H:p:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -420,6 +424,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'p':
+                if (scan_metric(optarg, &cfg->protocol)) return -1;
                 break;
             case 'H':
                 *header++ = optarg;
@@ -440,6 +447,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
+        return -1;
+    }
+    if (!(cfg->protocol == 0 || cfg->protocol == 1)) {
+        fprintf(stderr, "HTTP protocol must equal 0 or 1\n");
         return -1;
     }
 
