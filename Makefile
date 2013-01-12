@@ -1,6 +1,11 @@
-CFLAGS  := -std=c99 -Wall -O2 -pthread
-LDFLAGS := -pthread
-LIBS    := -lm
+CFLAGS  := -std=c99 -Wall -O2
+LIBS    := -lpthread -lm
+
+TARGET  := $(shell uname -s | tr [A-Z] [a-z] 2>/dev/null || echo unknown)
+
+ifeq ($(TARGET), sunos)
+	LIBS += -lsocket
+endif
 
 SRC  := wrk.c aprintf.c stats.c units.c ae.c zmalloc.c http_parser.c tinymt64.c
 BIN  := wrk
