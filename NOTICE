@@ -14,7 +14,9 @@ This product includes software developed by Salvatore Sanfilippo and
 other contributors to the redis project.
 
 Copyright (c) 2006-2010, Salvatore Sanfilippo <antirez at gmail dot com>
+Copyright (c) 2009-2012, Salvatore Sanfilippo <antirez at gmail dot com>
 Copyright (C) 2009 Harish Mallipeddi - harish.mallipeddi@gmail.com
+Copyright (c) 2012, Joyent, Inc. All rights reserved.
 
 Copyright (c) 2006-2009, Salvatore Sanfilippo
 All rights reserved.
