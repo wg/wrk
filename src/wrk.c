@@ -81,6 +81,13 @@ int main(int argc, char **argv) {
     char *url, **headers;
     int rc;
 
+    /*
+     * To avoid dying on SIGPIPE when the remote [local] host suddely dies,
+     * we should ignore SIGPIPE. This is handy when working against unstable
+     * servers which may abruptly terminate on assertions, segfaults, etc.
+     */
+    signal(SIGPIPE, SIG_IGN);
+
     /* +1 for possible Connection: keep-alive */
     headers = zmalloc((argc + 1) * sizeof(char *));
 
@@ -662,3 +669,4 @@ static void progress_report(thread *threads){
 }
 
 #endif /* __linux__ */
+
