@@ -29,11 +29,7 @@
 #include "tinymt64.h"
 #include "urls.h"
 
-#ifdef BSD
-#define LOCAL_ADDRSTRLEN (sizeof(struct sockaddr_un) - sizeof(((struct sockaddr_un *)0)->sun_len) - sizeof(((struct sockaddr_un *)0)->sun_family))
-#elif __linux
 #define LOCAL_ADDRSTRLEN sizeof(((struct sockaddr_un *)0)->sun_path)
-#endif
 
 static struct config {
     struct addrinfo addr;
