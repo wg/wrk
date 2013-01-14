@@ -68,7 +68,7 @@ static void usage() {
            "    -p, --paths       <s>  File containing path-only urls\n"
            "    -s, --socket      <s>  Connect to a local socket     \n"
            "                                                         \n"
-           "    -H, --header      <s>  Add header to request         \n"
+           "    -H, --header      <s>  Add HTTP header to request    \n"
            "    -v, --version          Print version details         \n"
            "                                                         \n"
            "  Numeric arguments may include a SI unit (2k, 2M, 2G)   \n");
@@ -88,8 +88,8 @@ int main(int argc, char **argv) {
      */
     signal(SIGPIPE, SIG_IGN);
 
-    /* +1 for possible Connection: keep-alive */
-    headers = zmalloc((argc + 1) * sizeof(char *));
+    /* Number of '-H' headers specified. */
+    headers = zmalloc(argc * sizeof(char *));
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
@@ -556,7 +556,6 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'k':
                 cfg->use_keepalive = 1;
-                *header++ = "Connection: keep-alive";
                 break;
             case 'H':
                 *header++ = optarg;
