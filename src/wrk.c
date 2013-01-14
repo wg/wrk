@@ -260,7 +260,7 @@ int main(int argc, char **argv) {
         thread *t = &threads[i];
 
 #ifdef __linux
-        await_thread(t->thread, threads);
+        await_thread_with_progress_report(t->thread, threads);
 #else
         pthread_join(t->thread, NULL);
 #endif
@@ -629,6 +629,29 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
 
+#if defined(__linux__)
+
+/* Will call progress_report every 5 seconds until the thread is finished */
+static int await_thread_with_progress_report(pthread_t t, thread *threads) {
+    int s;
+
+    while (1) {
+        struct timespec ts;
+        struct timeval tv;
+
+        gettimeofday(&tv, 0);
+        ts.tv_sec = tv.tv_sec + 5;
+        ts.tv_usec = tv.tv_nsec * 1000;
+        
+        s = pthread_timedjoin_np(t, NULL, &ts);
+        if (s == ETIMEDOUT) {
+            progress_report(threads);
+        } else {
+            return s;
+        }
+    }
+}
+
 static void progress_report(thread *threads){
     uint64_t complete=0;
 
@@ -638,20 +661,4 @@ static void progress_report(thread *threads){
     printf("Completed %"PRIu64" requests\n", complete);
 }
 
-/* Will call progress_report every 5 seconds until the thread is finished */
-static int await_thread(pthread_t t, thread *threads) {
-    struct timespec ts;
-    int s;
-
-    while (1) {
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 5;
-
-        s = pthread_timedjoin_np(t, NULL, &ts);
-        if (s == ETIMEDOUT) {
-            progress_report(threads);
-        } else {
-            return s;
-        }
-    }
-}
+#endif /* __linux__ */

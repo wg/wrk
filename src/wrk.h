@@ -75,6 +75,8 @@ static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
 
-static int await_thread(pthread_t, thread *);
+#ifdef __linux__
+static int await_thread_with_progress_report(pthread_t, thread *);
+#endif
 
 #endif /* WRK_H */
