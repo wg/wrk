@@ -1,4 +1,4 @@
-CFLAGS  := -std=c99 -Wall -O0 -g -pthread
+CFLAGS  := -std=c99 -Wall -O2 -pthread
 LDFLAGS := -pthread
 LIBS    := -lm
 
