@@ -79,6 +79,4 @@ static void print_stats(char *, stats *, char *(*)(long double));
 static int await_thread_with_progress_report(pthread_t, thread *);
 #endif
 
-static void setup_signal_masks();
-
 #endif /* WRK_H */
