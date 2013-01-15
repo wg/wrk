@@ -10,34 +10,41 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/uio.h>
+#include <sys/un.h>
+#include <assert.h>
+#include <errno.h>
 
 #include "aprintf.h"
 #include "stats.h"
 #include "units.h"
 #include "zmalloc.h"
 #include "tinymt64.h"
+#include "urls.h"
+
+#define LOCAL_ADDRSTRLEN sizeof(((struct sockaddr_un *)0)->sun_path)
 
 static struct config {
     struct addrinfo addr;
+    char sock_path[LOCAL_ADDRSTRLEN];
+    char *paths;
     uint64_t threads;
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    uint8_t use_keepalive;
+    uint8_t use_sock;
 } cfg;
-
-static struct {
-    size_t size;
-    char *buf;
-} request;
 
 static struct {
     stats *latency;
@@ -45,96 +52,210 @@ static struct {
     pthread_mutex_t mutex;
 } statistics;
 
+/* global for signal handling */
+static thread *threads;
+
 static const struct http_parser_settings parser_settings = {
     .on_message_complete = request_complete
 };
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"
-           "  Options:                                            \n"
-           "    -c, --connections <n>  Connections to keep open   \n"
-           "    -r, --requests    <n>  Total requests to make     \n"
-           "    -t, --threads     <n>  Number of threads to use   \n"
-           "                                                      \n"
-           "    -H, --header      <h>  Add header to request      \n"
-           "    -v, --version          Print version details      \n"
-           "                                                      \n"
-           "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
+    printf("Usage: wrk <options> <url>                               \n"
+           "  Options:                                               \n"
+           "    -c, --connections <n>  Connections to keep open      \n"
+           "    -r, --requests    <n>  Total requests to make        \n"
+           "    -t, --threads     <n>  Number of threads to use      \n"
+           "    -T, --timeout     <n>  Number of seconds to wait and read a full\n"
+           "                           response from the server, default is 2\n"
+           "    -k, --keepalive        Use HTTP/1.1 keep-alive       \n"
+           "    -p, --paths       <s>  File containing path-only urls\n"
+           "    -s, --socket      <s>  Connect to a local socket     \n"
+           "                                                         \n"
+           "    -H, --header      <s>  Add HTTP header to request    \n"
+           "    -v, --version          Print version details         \n"
+           "                                                         \n"
+           "  Numeric arguments may include a SI unit (2k, 2M, 2G)   \n");
 }
 
 int main(int argc, char **argv) {
     struct addrinfo *addrs, *addr;
     struct http_parser_url parser_url;
+    struct sigaction sigint_action;
     char *url, **headers;
     int rc;
 
-    headers = zmalloc((argc / 2) * sizeof(char *));
+    /*
+     * To avoid dying on SIGPIPE when the remote [local] host suddely dies,
+     * we should ignore SIGPIPE. This is handy when working against unstable
+     * servers which may abruptly terminate on assertions, segfaults, etc.
+     */
+    signal(SIGPIPE, SIG_IGN);
+
+    /* Number of '-H' headers specified. */
+    headers = zmalloc(argc * sizeof(char *));
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
         exit(1);
     }
 
-    if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
-        fprintf(stderr, "invalid URL: %s\n", url);
+    struct rlimit rlp;
+    getrlimit(RLIMIT_NOFILE, &rlp);
+    if(rlp.rlim_cur < (cfg.connections + 10 /* Wiggle room */)) {
+        fprintf(stderr, "Error: `ulimit -n` is %d, "
+                        "need at least %ld for proper testing\n",
+                        (int)rlp.rlim_cur, (long)(cfg.connections + 10));
         exit(1);
     }
 
-    char *host = extract_url_part(url, &parser_url, UF_HOST);
-    char *port = extract_url_part(url, &parser_url, UF_PORT);
-    char *service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *path = &url[parser_url.field_data[UF_PATH].off];
+    char *host = NULL;
+    char *port = NULL;
+    char *service = NULL;
+    char *path = NULL;
 
-    struct addrinfo hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
-    };
+    if (cfg.use_sock) {
+        /* Unix socket */
+        struct sockaddr_un un;
+#ifdef BSD
+        un.sun_len = sizeof(un);
+#endif
+        un.sun_family = AF_LOCAL;
+        strncpy(un.sun_path, cfg.sock_path, LOCAL_ADDRSTRLEN);
 
-    if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
-        const char *msg = gai_strerror(rc);
-        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
+        host = cfg.sock_path;
+        port = "0";
+        service = "http";
+        path = url;
 
-    for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-        int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-        if (fd == -1) continue;
-        if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-            if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
-                close(fd);
-                continue;
-            }
+        int fd = socket(AF_LOCAL, SOCK_STREAM, 0);
+        if (fd == -1) {
+            fprintf(stderr, "unable to create socket: %s\n", strerror(errno));
+            exit(1);
         }
-        close(fd);
-        break;
-    }
 
-    if (addr == NULL) {
-        char *msg = strerror(errno);
-        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
+        if (connect(fd, (struct sockaddr *)&un, sizeof(un)) == -1) {
+            fprintf(stderr, "unable to connect socket: %s\n", strerror(errno));
+            close(fd);
+            exit(1);
+        }
+
+        close(fd);
+
+        addr = zcalloc(sizeof(*addr));
+        if (addr == NULL) {
+            fprintf(stderr, "unable to allocate address: %s\n", strerror(errno));
+            exit(1);
+        }
+
+        addr->ai_addr = (struct sockaddr *)&un;
+        addr->ai_addrlen =  sizeof(un);
+        addr->ai_family = AF_LOCAL;
+        addr->ai_socktype = SOCK_STREAM;
+        addr->ai_protocol = 0;
+        addr->ai_next = NULL;
+    }
+    else {
+        /* TCP socket */
+        if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
+            fprintf(stderr, "invalid URL: %s\n", url);
+            exit(1);
+        }
+
+        host = extract_url_part(url, &parser_url, UF_HOST);
+        port = extract_url_part(url, &parser_url, UF_PORT);
+        service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
+        path = &url[parser_url.field_data[UF_PATH].off];
+
+        struct addrinfo hints = {
+            .ai_family   = AF_UNSPEC,
+            .ai_socktype = SOCK_STREAM
+        };
+
+        if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
+            const char *msg = gai_strerror(rc);
+            fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+            exit(1);
+        }
+
+        for (addr = addrs; addr != NULL; addr = addr->ai_next) {
+            int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+            if (fd == -1) continue;
+            if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
+                if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
+                    close(fd);
+                    continue;
+                }
+            }
+            close(fd);
+            break;
+        }
+
+        if (addr == NULL) {
+            char *msg = strerror(errno);
+            fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+            exit(1);
+        }
     }
 
     cfg.addr     = *addr;
-    request.buf  = format_request(host, port, path, headers);
-    request.size = strlen(request.buf);
+
+    if (cfg.paths) {
+        FILE *file = fopen(cfg.paths, "r");
+        char line[4096];
+        uint64_t urls = 0;
+        uint64_t lines = 0;
+
+        if (file == NULL) {
+            fprintf(stderr, "Cant open file %s\n", cfg.paths);
+            exit(1);
+        }
+        while (fgets(line, sizeof(line), file) != NULL) {
+            size_t len = strlen(line);
+            if (len > 1 && line[0] != '#') {
+                if (line[len-1] == '\n') line[len-1] = '\0';
+                if(urls_add(host, port, line, headers)){
+                    fprintf(stderr, "Error importing urls (%s) from file %s:%"PRIu64"\n",
+                            line, cfg.paths, lines + 1);
+                    exit(1);
+                }
+                urls++;
+            }
+            lines++;
+        }
+        if (!urls) {
+            fprintf(stderr, "Error importing urls. File '%s' is empty or all lines"
+                    " are commented-out\n", cfg.paths);
+            exit(1);
+        }
+        fclose(file);
+        printf("%"PRIu64" urls imported\n", urls);
+
+    }
+    else if (path != NULL && strlen(path) > 0) {
+        urls_add(host, port, path, headers);
+    }
+    else {
+        fprintf(stderr, "no paths provided\n");
+        exit(1);
+    }
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
     statistics.requests = stats_alloc(SAMPLES);
 
-    thread *threads = zcalloc(cfg.threads * sizeof(thread));
+    threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
-    uint64_t requests    = cfg.requests    / cfg.threads;
+    uint64_t requests_cnt    = cfg.requests    / cfg.threads;
 
-    for (uint64_t i = 0; i < cfg.threads; i++) {
+    for (long i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
-        t->connections = connections;
-        t->requests    = requests;
+        t->connections   = connections;
+        t->requests      = requests_cnt;
+        t->thread_index = (i + 1);
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %zu %s\n", i, msg);
+            fprintf(stderr, "Unable to create thread %ld %s\n", i, msg);
             exit(2);
         }
     }
@@ -144,15 +265,28 @@ int main(int argc, char **argv) {
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
+    uint64_t conns = 0;
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
+    sigint_action.sa_handler = &sig_handler;
+    sigemptyset (&sigint_action.sa_mask);
+    /* reset handler in case when pthread_cancel didn't stop
+       threads for some reason */
+    sigint_action.sa_flags = SA_RESETHAND;
+    sigaction(SIGINT, &sigint_action, NULL);
+
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
-        pthread_join(t->thread, NULL);
 
+#ifdef __linux
+        await_thread_with_progress_report(t->thread, threads);
+#else
+        pthread_join(t->thread, NULL);
+#endif
         complete += t->complete;
         bytes    += t->bytes;
+        conns    += t->conn_attempts;
 
         errors.connect += t->errors.connect;
         errors.read    += t->errors.read;
@@ -172,7 +306,8 @@ int main(int argc, char **argv) {
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    printf("  %"PRIu64" requests, %"PRIu64" sock connections in %s, %sB read\n",
+           complete, conns, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -188,22 +323,51 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+/* Stop threads, so main thread can print stats when join's return */
+static void sig_handler(int signum) {
+    int s;
+    printf("interrupted\n");
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        s = pthread_cancel(threads[i].thread);
+        if(s && (s != ESRCH)) exit(s);
+    }
+}
+
 void *thread_main(void *arg) {
     thread *thread = arg;
 
-    aeEventLoop *loop = aeCreateEventLoop(10 + cfg.connections * 3);
+    int connections_estimate = 10 + cfg.connections * 3;
+    aeEventLoop *loop = aeCreateEventLoop(connections_estimate);
+
+    if(loop == NULL) {
+        fprintf(stderr,
+                "Create an event loop for %d connections failed: %s\n"
+                "Consider raising `ulimit -n`.\n",
+                connections_estimate, strerror(errno));
+        exit(1);
+    }
+
     thread->cs   = zmalloc(thread->connections * sizeof(connection));
     thread->loop = loop;
     tinymt64_init(&thread->rand, time_us());
 
     connection *c = thread->cs;
 
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
+    for (long i = 0; i < thread->connections; i++, c++) {
         c->thread  = thread;
         c->latency = 0;
-        connect_socket(thread, c);
+        if(connect_socket(thread, c) == -1) {
+            fprintf(stderr,
+                "Thread %ld: Initial burst of %"PRIu64" connections failed at %ld: %s\n",
+                thread->thread_index, thread->connections, i, strerror(errno));
+            if(errno == EMFILE) {
+                fprintf(stderr, "Consider raising `ulimit -n`.\n");
+            }
+            exit(1);
+        }
     }
 
+    /* TODO: use cfg.timeout instead of TIMEOUT_INTERVAL_MS */
     aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
     aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
@@ -222,11 +386,16 @@ static int connect_socket(thread *thread, connection *c) {
     int fd, flags;
 
     fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+    if(fd == -1) return -1;
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
+    thread->conn_attempts++;
+
     if (connect(fd, addr.ai_addr, addr.ai_addrlen) == -1) {
+        /* TODO: special handling for EADDRNOTAVAIL (has no free
+           ephemeral ports) */
         if (errno != EINPROGRESS) {
             thread->errors.connect++;
             goto error;
@@ -282,23 +451,22 @@ static int request_complete(http_parser *parser) {
     }
 
     if (++thread->complete >= thread->requests) {
+        /* Completed the necessary number of requests; do not send more. */
         aeStop(thread->loop);
-        goto done;
+    } else {
+        c->latency = time_us() - c->start;
+
+        /* Reconnect or reuse the socket if keepalive is allowed. */
+        if (cfg.use_keepalive && http_should_keep_alive(parser)) {
+            http_parser_init(parser, HTTP_RESPONSE);
+            aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
+            aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE,
+                socket_writeable, c);
+        } else {
+            (void)reconnect_socket(thread, c); // Ignore result for now.
+        }
     }
 
-    c->latency = time_us() - c->start;
-    if (!http_should_keep_alive(parser)) goto reconnect;
-
-    http_parser_init(parser, HTTP_RESPONSE);
-    aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
-    aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-
-    goto done;
-
-  reconnect:
-    reconnect_socket(thread, c);
-
-  done:
     return 0;
 }
 
@@ -311,6 +479,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         if (maxAge > c->start) {
             thread->errors.timeout++;
+            reconnect_socket(thread, c);
         }
     }
 
@@ -319,8 +488,9 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
+    url_request *request = urls_request(&c->thread->rand);
 
-    if (write(fd, request.buf, request.size) < request.size) goto error;
+    if (write(fd, request->buf, request->size) < request->size) goto error;
     c->start = time_us();
     aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     aeCreateFileEvent(loop, fd, AE_READABLE, socket_readable, c);
@@ -336,7 +506,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     ssize_t n;
 
-    if ((n = read(fd, c->buf, sizeof(c->buf))) == -1) goto error;
+    if ((n = read(fd, c->buf, sizeof(c->buf))) < 1) goto error;
     if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
     c->thread->bytes += n;
 
@@ -375,45 +545,39 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
     return part;
 }
 
-static char *format_request(char *host, char *port, char *path, char **headers) {
-    char *req = NULL;
-
-    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
-    aprintf(&req, "Host: %s", host);
-    if (port) aprintf(&req, ":%s", port);
-    aprintf(&req, "\r\n");
-
-    for (char **h = headers; *h != NULL; h++) {
-        aprintf(&req, "%s\r\n", *h);
-    }
-
-    aprintf(&req, "\r\n");
-    return req;
-}
-
 static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+    { "timeout",     required_argument, NULL, 'T' },
+    { "keepalive",   no_argument,       NULL, 'k' },
+    { "paths",       required_argument, NULL, 'p' },
     { "header",      required_argument, NULL, 'H' },
+    { "socket",      required_argument, NULL, 's' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
 };
 
 static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
-    char c, **header = headers;
+    char c, *paths, **header = headers;
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
     cfg->connections = 10;
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->use_keepalive = 0;
+    cfg->use_sock    = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:p:H:s:T:kvh?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
+                break;
+            case 'T':
+                if (scan_metric(optarg, &cfg->timeout)) return -1;
+                cfg->timeout *= 1000; /* milliseconds */
                 break;
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
@@ -421,8 +585,25 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
                 break;
+            case 'k':
+                cfg->use_keepalive = 1;
+                break;
             case 'H':
                 *header++ = optarg;
+                break;
+            case 'p':
+                paths = zmalloc(strlen(optarg) + 1);
+                cfg->paths = strcpy(paths, optarg);
+                break;
+            case 's':
+                if (strlen(optarg) < LOCAL_ADDRSTRLEN) {
+                    strncpy(cfg->sock_path, optarg, LOCAL_ADDRSTRLEN);
+                    cfg->use_sock = 1;
+                }
+                else {
+                    fprintf(stderr, "socket path length must be less than %zd\n", LOCAL_ADDRSTRLEN);
+                    return -1;
+                }
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
@@ -436,14 +617,21 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         }
     }
 
-    if (optind == argc || !cfg->threads || !cfg->requests) return -1;
+    if (!cfg->threads || !cfg->requests) return -1;
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
     }
 
-    *url    = argv[optind];
+    if (optind == argc) {
+        if (cfg->use_sock) *url = NULL;
+        else return -1;
+    }
+    else {
+        *url = argv[optind];
+    }
+
     *header = NULL;
 
     return 0;
@@ -477,3 +665,38 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     print_units(max,   fmt, 9);
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
+
+#if defined(__linux__)
+
+static void progress_report(thread *threads){
+    uint64_t complete=0;
+
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        complete += threads[i].complete;
+    }
+    printf("Completed %"PRIu64" requests\n", complete);
+}
+
+/* Will call progress_report every 5 seconds until the thread is finished */
+static int await_thread_with_progress_report(pthread_t t, thread *threads) {
+    int s;
+
+    while (1) {
+        struct timespec ts;
+        struct timeval tv;
+
+        gettimeofday(&tv, 0);
+        ts.tv_sec = tv.tv_sec + 5;
+        ts.tv_nsec = tv.tv_usec * 1000;
+        
+        s = pthread_timedjoin_np(t, NULL, &ts);
+        if (s == ETIMEDOUT) {
+            progress_report(threads);
+        } else {
+            return s;
+        }
+    }
+}
+
+#endif /* __linux__ */
+

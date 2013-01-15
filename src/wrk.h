@@ -1,6 +1,8 @@
 #ifndef WRK_H
 #define WRK_H
 
+#define _GNU_SOURCE
+
 #include "config.h"
 #include <pthread.h>
 #include <inttypes.h>
@@ -30,14 +32,16 @@ typedef struct {
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
+    struct connection *cs;
+    long thread_index;
     uint64_t connections;
+    uint64_t conn_attempts;
     uint64_t requests;
     uint64_t complete;
     uint64_t bytes;
     uint64_t start;
     tinymt64_t rand;
     errors errors;
-    struct connection *cs;
 } thread;
 
 typedef struct connection {
@@ -51,6 +55,7 @@ typedef struct connection {
 
 struct config;
 
+static void sig_handler(int);
 static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
 static int reconnect_socket(thread *, connection *);
@@ -66,10 +71,13 @@ static uint64_t time_us();
 static uint64_t rand64(tinymt64_t *, uint64_t);
 
 static char *extract_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
-static char *format_request(char *, char *, char *, char **);
 
 static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
+
+#ifdef __linux__
+static int await_thread_with_progress_report(pthread_t, thread *);
+#endif
 
 #endif /* WRK_H */
