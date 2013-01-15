@@ -21,6 +21,8 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <assert.h>
+#include <errno.h>
 
 #include "aprintf.h"
 #include "stats.h"
@@ -29,11 +31,7 @@
 #include "tinymt64.h"
 #include "urls.h"
 
-#ifdef BSD
-#define LOCAL_ADDRSTRLEN (sizeof(struct sockaddr_un) - sizeof(((struct sockaddr_un *)0)->sun_len) - sizeof(((struct sockaddr_un *)0)->sun_family))
-#elif __linux
 #define LOCAL_ADDRSTRLEN sizeof(((struct sockaddr_un *)0)->sun_path)
-#endif
 
 static struct config {
     struct addrinfo addr;
@@ -72,7 +70,7 @@ static void usage() {
            "    -p, --paths       <s>  File containing path-only urls\n"
            "    -s, --socket      <s>  Connect to a local socket     \n"
            "                                                         \n"
-           "    -H, --header      <s>  Add header to request         \n"
+           "    -H, --header      <s>  Add HTTP header to request    \n"
            "    -v, --version          Print version details         \n"
            "                                                         \n"
            "  Numeric arguments may include a SI unit (2k, 2M, 2G)   \n");
@@ -85,11 +83,27 @@ int main(int argc, char **argv) {
     char *url, **headers;
     int rc;
 
-    /* +1 for possible Connection: keep-alive */
-    headers = zmalloc((argc + 1) * sizeof(char *));
+    /*
+     * To avoid dying on SIGPIPE when the remote [local] host suddely dies,
+     * we should ignore SIGPIPE. This is handy when working against unstable
+     * servers which may abruptly terminate on assertions, segfaults, etc.
+     */
+    signal(SIGPIPE, SIG_IGN);
+
+    /* Number of '-H' headers specified. */
+    headers = zmalloc(argc * sizeof(char *));
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
+        exit(1);
+    }
+
+    struct rlimit rlp;
+    getrlimit(RLIMIT_NOFILE, &rlp);
+    if(rlp.rlim_cur < (cfg.connections + 10 /* Wiggle room */)) {
+        fprintf(stderr, "Error: `ulimit -n` is %d, "
+                        "need at least %ld for proper testing\n",
+                        (int)rlp.rlim_cur, (long)(cfg.connections + 10));
         exit(1);
     }
 
@@ -232,14 +246,15 @@ int main(int argc, char **argv) {
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t requests_cnt    = cfg.requests    / cfg.threads;
 
-    for (uint64_t i = 0; i < cfg.threads; i++) {
+    for (long i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
-        t->connections = connections;
-        t->requests    = requests_cnt;
+        t->connections   = connections;
+        t->requests      = requests_cnt;
+        t->thread_index = (i + 1);
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
+            fprintf(stderr, "Unable to create thread %ld %s\n", i, msg);
             exit(2);
         }
     }
@@ -264,7 +279,7 @@ int main(int argc, char **argv) {
         thread *t = &threads[i];
 
 #ifdef __linux
-        await_thread(t->thread, threads);
+        await_thread_with_progress_report(t->thread, threads);
 #else
         pthread_join(t->thread, NULL);
 #endif
@@ -320,17 +335,35 @@ static void sig_handler(int signum) {
 void *thread_main(void *arg) {
     thread *thread = arg;
 
-    aeEventLoop *loop = aeCreateEventLoop(10 + cfg.connections * 3);
+    int connections_estimate = 10 + cfg.connections * 3;
+    aeEventLoop *loop = aeCreateEventLoop(connections_estimate);
+
+    if(loop == NULL) {
+        fprintf(stderr,
+                "Create an event loop for %d connections failed: %s\n"
+                "Consider raising `ulimit -n`.\n",
+                connections_estimate, strerror(errno));
+        exit(1);
+    }
+
     thread->cs   = zmalloc(thread->connections * sizeof(connection));
     thread->loop = loop;
     tinymt64_init(&thread->rand, time_us());
 
     connection *c = thread->cs;
 
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
+    for (long i = 0; i < thread->connections; i++, c++) {
         c->thread  = thread;
         c->latency = 0;
-        connect_socket(thread, c);
+        if(connect_socket(thread, c) == -1) {
+            fprintf(stderr,
+                "Thread %ld: Initial burst of %"PRIu64" connections failed at %ld: %s\n",
+                thread->thread_index, thread->connections, i, strerror(errno));
+            if(errno == EMFILE) {
+                fprintf(stderr, "Consider raising `ulimit -n`.\n");
+            }
+            exit(1);
+        }
     }
 
     /* TODO: use cfg.timeout instead of TIMEOUT_INTERVAL_MS */
@@ -352,6 +385,7 @@ static int connect_socket(thread *thread, connection *c) {
     int fd, flags;
 
     fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+    if(fd == -1) return -1;
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -416,23 +450,22 @@ static int request_complete(http_parser *parser) {
     }
 
     if (++thread->complete >= thread->requests) {
+        /* Completed the necessary number of requests; do not send more. */
         aeStop(thread->loop);
-        goto done;
+    } else {
+        c->latency = time_us() - c->start;
+
+        /* Reconnect or reuse the socket if keepalive is allowed. */
+        if (cfg.use_keepalive && http_should_keep_alive(parser)) {
+            http_parser_init(parser, HTTP_RESPONSE);
+            aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
+            aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE,
+                socket_writeable, c);
+        } else {
+            (void)reconnect_socket(thread, c); // Ignore result for now.
+        }
     }
 
-    c->latency = time_us() - c->start;
-    if (!(cfg.use_keepalive && http_should_keep_alive(parser))) goto reconnect;
-
-    http_parser_init(parser, HTTP_RESPONSE);
-    aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
-    aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-
-    goto done;
-
-  reconnect:
-    reconnect_socket(thread, c);
-
-  done:
     return 0;
 }
 
@@ -553,7 +586,6 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'k':
                 cfg->use_keepalive = 1;
-                *header++ = "Connection: keep-alive";
                 break;
             case 'H':
                 *header++ = optarg;
@@ -633,6 +665,29 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
 
+#if defined(__linux__)
+
+/* Will call progress_report every 5 seconds until the thread is finished */
+static int await_thread_with_progress_report(pthread_t t, thread *threads) {
+    int s;
+
+    while (1) {
+        struct timespec ts;
+        struct timeval tv;
+
+        gettimeofday(&tv, 0);
+        ts.tv_sec = tv.tv_sec + 5;
+        ts.tv_usec = tv.tv_nsec * 1000;
+        
+        s = pthread_timedjoin_np(t, NULL, &ts);
+        if (s == ETIMEDOUT) {
+            progress_report(threads);
+        } else {
+            return s;
+        }
+    }
+}
+
 static void progress_report(thread *threads){
     uint64_t complete=0;
 
@@ -642,20 +697,5 @@ static void progress_report(thread *threads){
     printf("Completed %"PRIu64" requests\n", complete);
 }
 
-/* Will call progress_report every 5 seconds until the thread is finished */
-static int await_thread(pthread_t t, thread *threads) {
-    struct timespec ts;
-    int s;
+#endif /* __linux__ */
 
-    while (1) {
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 5;
-
-        s = pthread_timedjoin_np(t, NULL, &ts);
-        if (s == ETIMEDOUT) {
-            progress_report(threads);
-        } else {
-            return s;
-        }
-    }
-}

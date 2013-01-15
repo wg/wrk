@@ -32,6 +32,8 @@ typedef struct {
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
+    struct connection *cs;
+    long thread_index;
     uint64_t connections;
     uint64_t conn_attempts;
     uint64_t requests;
@@ -40,7 +42,6 @@ typedef struct {
     uint64_t start;
     tinymt64_t rand;
     errors errors;
-    struct connection *cs;
 } thread;
 
 typedef struct connection {
@@ -75,6 +76,8 @@ static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
 
-static int await_thread(pthread_t, thread *);
+#ifdef __linux__
+static int await_thread_with_progress_report(pthread_t, thread *);
+#endif
 
 #endif /* WRK_H */
