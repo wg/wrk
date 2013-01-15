@@ -419,23 +419,22 @@ static int request_complete(http_parser *parser) {
     }
 
     if (++thread->complete >= thread->requests) {
+        /* Completed the necessary number of requests; do not send more. */
         aeStop(thread->loop);
-        goto done;
+    } else {
+        c->latency = time_us() - c->start;
+
+        /* Reconnect or reuse the socket if keepalive is allowed. */
+        if (cfg.use_keepalive && http_should_keep_alive(parser)) {
+            http_parser_init(parser, HTTP_RESPONSE);
+            aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
+            aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE,
+                socket_writeable, c);
+        } else {
+            reconnect_socket(thread, c);
+        }
     }
 
-    c->latency = time_us() - c->start;
-    if (!(cfg.use_keepalive && http_should_keep_alive(parser))) goto reconnect;
-
-    http_parser_init(parser, HTTP_RESPONSE);
-    aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
-    aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-
-    goto done;
-
-  reconnect:
-    reconnect_socket(thread, c);
-
-  done:
     return 0;
 }
 
