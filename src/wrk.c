@@ -17,6 +17,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/uio.h>
@@ -667,6 +668,15 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
 
 #if defined(__linux__)
 
+static void progress_report(thread *threads){
+    uint64_t complete=0;
+
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        complete += threads[i].complete;
+    }
+    printf("Completed %"PRIu64" requests\n", complete);
+}
+
 /* Will call progress_report every 5 seconds until the thread is finished */
 static int await_thread_with_progress_report(pthread_t t, thread *threads) {
     int s;
@@ -677,7 +687,7 @@ static int await_thread_with_progress_report(pthread_t t, thread *threads) {
 
         gettimeofday(&tv, 0);
         ts.tv_sec = tv.tv_sec + 5;
-        ts.tv_usec = tv.tv_nsec * 1000;
+        ts.tv_nsec = tv.tv_usec * 1000;
         
         s = pthread_timedjoin_np(t, NULL, &ts);
         if (s == ETIMEDOUT) {
@@ -686,15 +696,6 @@ static int await_thread_with_progress_report(pthread_t t, thread *threads) {
             return s;
         }
     }
-}
-
-static void progress_report(thread *threads){
-    uint64_t complete=0;
-
-    for (uint64_t i = 0; i < cfg.threads; i++) {
-        complete += threads[i].complete;
-    }
-    printf("Completed %"PRIu64" requests\n", complete);
 }
 
 #endif /* __linux__ */
