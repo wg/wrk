@@ -21,6 +21,8 @@
 #include <sys/time.h>
 #include <sys/uio.h>
 #include <sys/un.h>
+#include <assert.h>
+#include <errno.h>
 
 #include "aprintf.h"
 #include "stats.h"
@@ -93,6 +95,15 @@ int main(int argc, char **argv) {
 
     if (parse_args(&cfg, &url, headers, argc, argv)) {
         usage();
+        exit(1);
+    }
+
+    struct rlimit rlp;
+    getrlimit(RLIMIT_NOFILE, &rlp);
+    if(rlp.rlim_cur < (cfg.connections + 10 /* Wiggle room */)) {
+        fprintf(stderr, "Error: `ulimit -n` is %d, "
+                        "need at least %ld for proper testing\n",
+                        (int)rlp.rlim_cur, (long)(cfg.connections + 10));
         exit(1);
     }
 
@@ -235,14 +246,15 @@ int main(int argc, char **argv) {
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t requests_cnt    = cfg.requests    / cfg.threads;
 
-    for (uint64_t i = 0; i < cfg.threads; i++) {
+    for (long i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
-        t->connections = connections;
-        t->requests    = requests_cnt;
+        t->connections   = connections;
+        t->requests      = requests_cnt;
+        t->thread_index = (i + 1);
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
+            fprintf(stderr, "Unable to create thread %ld %s\n", i, msg);
             exit(2);
         }
     }
@@ -323,17 +335,35 @@ static void sig_handler(int signum) {
 void *thread_main(void *arg) {
     thread *thread = arg;
 
-    aeEventLoop *loop = aeCreateEventLoop(10 + cfg.connections * 3);
+    int connections_estimate = 10 + cfg.connections * 3;
+    aeEventLoop *loop = aeCreateEventLoop(connections_estimate);
+
+    if(loop == NULL) {
+        fprintf(stderr,
+                "Create an event loop for %d connections failed: %s\n"
+                "Consider raising `ulimit -n`.\n",
+                connections_estimate, strerror(errno));
+        exit(1);
+    }
+
     thread->cs   = zmalloc(thread->connections * sizeof(connection));
     thread->loop = loop;
     tinymt64_init(&thread->rand, time_us());
 
     connection *c = thread->cs;
 
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
+    for (long i = 0; i < thread->connections; i++, c++) {
         c->thread  = thread;
         c->latency = 0;
-        connect_socket(thread, c);
+        if(connect_socket(thread, c) == -1) {
+            fprintf(stderr,
+                "Thread %ld: Initial burst of %"PRIu64" connections failed at %ld: %s\n",
+                thread->thread_index, thread->connections, i, strerror(errno));
+            if(errno == EMFILE) {
+                fprintf(stderr, "Consider raising `ulimit -n`.\n");
+            }
+            exit(1);
+        }
     }
 
     /* TODO: use cfg.timeout instead of TIMEOUT_INTERVAL_MS */
@@ -355,6 +385,7 @@ static int connect_socket(thread *thread, connection *c) {
     int fd, flags;
 
     fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+    if(fd == -1) return -1;
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
@@ -431,7 +462,7 @@ static int request_complete(http_parser *parser) {
             aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE,
                 socket_writeable, c);
         } else {
-            reconnect_socket(thread, c);
+            (void)reconnect_socket(thread, c); // Ignore result for now.
         }
     }
 
