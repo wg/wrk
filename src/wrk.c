@@ -141,8 +141,15 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    if (cfg.json) {
+        printf("{\n");
+        printf("  \"%s\": %"PRIu64",\n", "requests", cfg.requests);
+        printf("  \"%s\": %"PRIu64",\n", "threads", cfg.threads);
+        printf("  \"%s\": %"PRIu64",\n", "connections", cfg.connections);
+    } else {
+        printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
+        printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    }
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
