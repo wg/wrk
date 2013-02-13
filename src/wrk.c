@@ -139,9 +139,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
-
     uint64_t start    = time_us();
     uint64_t complete = 0;
     uint64_t bytes    = 0;
@@ -166,6 +163,7 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
+    printf("\n");
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
@@ -450,7 +448,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
 }
 
 static void print_stats_header() {
-    printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
+    printf("   Thread Stats%10s%15s%12s%15s\n", "Avg", "Stdev", "Max", "+/- Stdev");
 }
 
 static void print_units(long double n, char *(*fmt)(long double), int width) {
@@ -471,9 +469,9 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     long double max   = stats_max(stats);
     long double stdev = stats_stdev(stats, mean);
 
-    printf("    %-10s", name);
-    print_units(mean,  fmt, 8);
-    print_units(stdev, fmt, 10);
-    print_units(max,   fmt, 9);
-    printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+    printf("     %-10s", name);
+    print_units(mean,  fmt, 12);
+    print_units(stdev, fmt, 15);
+    print_units(max,   fmt, 12);
+    printf("%10.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
