@@ -32,6 +32,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    int json;
 } cfg;
 
 static struct {
@@ -56,6 +57,7 @@ static void usage() {
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
            "                                                      \n"
+           "    -j, --json             Output JSON statistics     \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -139,8 +141,15 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    if (cfg.json) {
+        printf("{\n");
+        printf("  \"%s\": %"PRIu64",\n", "requests", cfg.requests);
+        printf("  \"%s\": %"PRIu64",\n", "threads", cfg.threads);
+        printf("  \"%s\": %"PRIu64",\n", "connections", cfg.connections);
+    } else {
+        printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
+        printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    }
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -166,13 +175,15 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
-    print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
+    if (!cfg.json) {
+        print_stats_header();
+        print_stats("Latency", statistics.latency, format_time_us);
+        print_stats("Req/Sec", statistics.requests, format_metric);
+    }
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    if (!cfg.json) printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -182,8 +193,15 @@ int main(int argc, char **argv) {
         printf("  Non-2xx or 3xx responses: %d\n", errors.status);
     }
 
-    printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    if (cfg.json) {
+        printf("  \"%s\": %9.2Lf,\n", "requests per second", req_per_s);
+        printf("  \"%s\": %.0Lf,\n", "transfer per second", bytes_per_s);
+        printf("  \"%s\": %lld\n", "duration", runtime_us);
+        printf("}\n");
+    } else {
+        printf("Requests/sec: %9.2Lf\n", req_per_s);
+        printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    }
 
     return 0;
 }
@@ -396,6 +414,7 @@ static struct option longopts[] = {
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "json",        no_argument,       NULL, 'j' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -410,7 +429,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:j:H:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -420,6 +439,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'j':
+                cfg->json = 1;
                 break;
             case 'H':
                 *header++ = optarg;
