@@ -35,7 +35,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <poll.h>
 #include <string.h>
+#include <time.h>
+#include <errno.h>
 
 #include "ae.h"
 #include "zmalloc.h"
@@ -43,13 +46,17 @@
 
 /* Include the best multiplexing layer supported by this system.
  * The following should be ordered by performances, descending. */
-#ifdef HAVE_EPOLL
-#include "ae_epoll.c"
+#ifdef HAVE_EVPORT
+#include "ae_evport.c"
 #else
-    #ifdef HAVE_KQUEUE
-    #include "ae_kqueue.c"
+    #ifdef HAVE_EPOLL
+    #include "ae_epoll.c"
     #else
-    #include "ae_select.c"
+        #ifdef HAVE_KQUEUE
+        #include "ae_kqueue.c"
+        #else
+        #include "ae_select.c"
+        #endif
     #endif
 #endif
 
@@ -62,6 +69,7 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     eventLoop->fired = zmalloc(sizeof(aeFiredEvent)*setsize);
     if (eventLoop->events == NULL || eventLoop->fired == NULL) goto err;
     eventLoop->setsize = setsize;
+    eventLoop->lastTime = time(NULL);
     eventLoop->timeEventHead = NULL;
     eventLoop->timeEventNextId = 0;
     eventLoop->stop = 0;
@@ -97,7 +105,10 @@ void aeStop(aeEventLoop *eventLoop) {
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
-    if (fd >= eventLoop->setsize) return AE_ERR;
+    if (fd >= eventLoop->setsize) {
+        errno = ERANGE;
+        return AE_ERR;
+    }
     aeFileEvent *fe = &eventLoop->events[fd];
 
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
@@ -231,6 +242,24 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
     int processed = 0;
     aeTimeEvent *te;
     long long maxId;
+    time_t now = time(NULL);
+
+    /* If the system clock is moved to the future, and then set back to the
+     * right value, time events may be delayed in a random way. Often this
+     * means that scheduled operations will not be performed soon enough.
+     *
+     * Here we try to detect system clock skews, and force all the time
+     * events to be processed ASAP when this happens: the idea is that
+     * processing events earlier is less dangerous than delaying them
+     * indefinitely, and practice suggests it is. */
+    if (now < eventLoop->lastTime) {
+        te = eventLoop->timeEventHead;
+        while(te) {
+            te->when_sec = 0;
+            te = te->next;
+        }
+    }
+    eventLoop->lastTime = now;
 
     te = eventLoop->timeEventHead;
     maxId = eventLoop->timeEventNextId-1;
@@ -280,7 +309,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
 /* Process every pending time event, then every pending file event
  * (that may be registered by time event callbacks just processed).
  * Without special flags the function sleeps until some file event
- * fires, or when the next time event occurrs (if any).
+ * fires, or when the next time event occurs (if any).
  *
  * If flags is 0, the function does nothing and returns.
  * if flags has AE_ALL_EVENTS set, all the kind of events are processed.
@@ -327,7 +356,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             if (tvp->tv_usec < 0) tvp->tv_usec = 0;
         } else {
             /* If we have to check for events but need to return
-             * ASAP because of AE_DONT_WAIT we need to se the timeout
+             * ASAP because of AE_DONT_WAIT we need to set the timeout
              * to zero */
             if (flags & AE_DONT_WAIT) {
                 tv.tv_sec = tv.tv_usec = 0;
@@ -366,24 +395,22 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
     return processed; /* return the number of processed file/time events */
 }
 
-/* Wait for millseconds until the given file descriptor becomes
+/* Wait for milliseconds until the given file descriptor becomes
  * writable/readable/exception */
 int aeWait(int fd, int mask, long long milliseconds) {
-    struct timeval tv;
-    fd_set rfds, wfds, efds;
+    struct pollfd pfd;
     int retmask = 0, retval;
 
-    tv.tv_sec = milliseconds/1000;
-    tv.tv_usec = (milliseconds%1000)*1000;
-    FD_ZERO(&rfds);
-    FD_ZERO(&wfds);
-    FD_ZERO(&efds);
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = fd;
+    if (mask & AE_READABLE) pfd.events |= POLLIN;
+    if (mask & AE_WRITABLE) pfd.events |= POLLOUT;
 
-    if (mask & AE_READABLE) FD_SET(fd,&rfds);
-    if (mask & AE_WRITABLE) FD_SET(fd,&wfds);
-    if ((retval = select(fd+1, &rfds, &wfds, &efds, &tv)) > 0) {
-        if (FD_ISSET(fd,&rfds)) retmask |= AE_READABLE;
-        if (FD_ISSET(fd,&wfds)) retmask |= AE_WRITABLE;
+    if ((retval = poll(&pfd, 1, milliseconds))== 1) {
+        if (pfd.revents & POLLIN) retmask |= AE_READABLE;
+        if (pfd.revents & POLLOUT) retmask |= AE_WRITABLE;
+	if (pfd.revents & POLLERR) retmask |= AE_WRITABLE;
+        if (pfd.revents & POLLHUP) retmask |= AE_WRITABLE;
         return retmask;
     } else {
         return retval;
