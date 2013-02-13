@@ -32,6 +32,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    int json;
 } cfg;
 
 static struct {
@@ -56,6 +57,7 @@ static void usage() {
            "    -r, --requests    <n>  Total requests to make     \n"
            "    -t, --threads     <n>  Number of threads to use   \n"
            "                                                      \n"
+           "    -j, --json             Output JSON statistics     \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -396,6 +398,7 @@ static struct option longopts[] = {
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "json",        no_argument,       NULL, 'j' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -410,7 +413,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:j:H:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -420,6 +423,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'j':
+                cfg->json = 1;
                 break;
             case 'H':
                 *header++ = optarg;
