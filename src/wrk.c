@@ -180,8 +180,8 @@ int main(int argc, char **argv) {
         printf("  Non-2xx or 3xx responses: %d\n", errors.status);
     }
 
-    printf("\n   Requests/sec: %9.2Lf\n", req_per_s);
-    printf("   Transfer/sec: %8sB\n\n", format_binary(bytes_per_s));
+    printf("\n   Requests/sec: \e[36m%9.2Lf\e[m\n", req_per_s);
+    printf("   Transfer/sec: \e[36m%8sB\e[m\n\n", format_binary(bytes_per_s));
 
     return 0;
 }
@@ -459,7 +459,7 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
     if (isalpha(msg[len-2])) pad--;
     width -= pad;
 
-    printf("%*.*s%.*s", width, width, msg, pad, "  ");
+    printf("\e[36m%*.*s%.*s\e[0m", width, width, msg, pad, "  ");
 
     free(msg);
 }
@@ -473,5 +473,5 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     print_units(mean,  fmt, 12);
     print_units(stdev, fmt, 15);
     print_units(max,   fmt, 12);
-    printf("%10.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+    printf("\e[36m%10.2Lf%%\e[m\n", stats_within_stdev(stats, mean, stdev, 1));
 }
