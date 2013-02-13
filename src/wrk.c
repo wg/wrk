@@ -175,11 +175,9 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
-    if (!cfg.json) {
-        print_stats_header();
-        print_stats("Latency", statistics.latency, format_time_us);
-        print_stats("Req/Sec", statistics.requests, format_metric);
-    }
+    print_stats_header();
+    print_stats("Latency", statistics.latency, format_time_us);
+    print_stats("Req/Sec", statistics.requests, format_metric);
 
     char *runtime_msg = format_time_us(runtime_us);
 
@@ -196,6 +194,8 @@ int main(int argc, char **argv) {
     if (cfg.json) {
         printf("  \"%s\": %9.2Lf,\n", "requests per second", req_per_s);
         printf("  \"%s\": %.0Lf,\n", "transfer per second", bytes_per_s);
+        printf("  \"%s\": %lld\n", "duration", runtime_us);
+        printf("}\n");
     } else {
         printf("Requests/sec: %9.2Lf\n", req_per_s);
         printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
