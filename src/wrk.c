@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    printf("\n   %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -180,8 +180,8 @@ int main(int argc, char **argv) {
         printf("  Non-2xx or 3xx responses: %d\n", errors.status);
     }
 
-    printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    printf("\n   Requests/sec: %9.2Lf\n", req_per_s);
+    printf("   Transfer/sec: %8sB\n\n", format_binary(bytes_per_s));
 
     return 0;
 }
