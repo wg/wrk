@@ -1,3 +1,5 @@
+PREFIX := /usr/local
+
 CFLAGS  := -std=c99 -Wall -O2 -pthread
 LDFLAGS := -pthread
 LIBS    := -lm
@@ -24,7 +26,13 @@ $(ODIR):
 $(ODIR)/%.o : %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-.PHONY: all clean
+install: $(BIN)
+	install $< $(PREFIX)/bin
+
+uninstall:
+	rm $(PREFIX)/bin/$(BIN)
+
+.PHONY: all clean install uninstall
 .SUFFIXES:
 .SUFFIXES: .c .o
 
