@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -119,6 +120,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
+    signal(SIGPIPE, SIG_IGN);
     cfg.addr     = *addr;
     request.buf  = format_request(host, port, path, headers);
     request.size = strlen(request.buf);
@@ -340,7 +342,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     ssize_t n;
 
-    if ((n = read(fd, c->buf, sizeof(c->buf))) == -1) goto error;
+    if ((n = read(fd, c->buf, sizeof(c->buf))) <= 0) goto error;
     if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
     c->thread->bytes += n;
 
