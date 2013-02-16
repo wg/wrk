@@ -83,7 +83,11 @@ int main(int argc, char **argv) {
     char *host = extract_url_part(url, &parser_url, UF_HOST);
     char *port = extract_url_part(url, &parser_url, UF_PORT);
     char *service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *path = &url[parser_url.field_data[UF_PATH].off];
+    char *path = "/";
+
+    if (parser_url.field_set & (1 << UF_PATH)) {
+        path = &url[parser_url.field_data[UF_PATH].off];
+    }
 
     struct addrinfo hints = {
         .ai_family   = AF_UNSPEC,
@@ -134,7 +138,7 @@ int main(int argc, char **argv) {
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %zu %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
             exit(2);
         }
     }
