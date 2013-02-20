@@ -27,6 +27,9 @@
 #include "zmalloc.h"
 #include "tinymt64.h"
 
+extern char *optarg;
+extern int optind, opterr;
+
 static struct config {
     struct addrinfo addr;
     uint64_t threads;

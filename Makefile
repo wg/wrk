@@ -1,4 +1,4 @@
-CFLAGS  := -std=c99 -Wall -O2
+CFLAGS  := -std=c99 -Wall -O2 -pthread
 LIBS    := -lpthread -lm
 
 TARGET  := $(shell uname -s | tr [A-Z] [a-z] 2>/dev/null || echo unknown)
