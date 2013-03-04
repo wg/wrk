@@ -383,14 +383,19 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 
 static char *format_request(char *host, char *port, char *path, char **headers) {
     char *req = NULL;
+    int has_host_hdr = 0;
 
     aprintf(&req, "GET %s HTTP/1.1\r\n", path);
-    aprintf(&req, "Host: %s", host);
-    if (port) aprintf(&req, ":%s", port);
-    aprintf(&req, "\r\n");
-
     for (char **h = headers; *h != NULL; h++) {
         aprintf(&req, "%s\r\n", *h);
+        if (strncasecmp(*h, "Host:", 5) == 0) {
+            has_host_hdr = 1;
+        }
+    }
+    if (!has_host_hdr) {
+        aprintf(&req, "Host: %s", host);
+        if (port) aprintf(&req, ":%s", port);
+        aprintf(&req, "\r\n");
     }
 
     aprintf(&req, "\r\n");
