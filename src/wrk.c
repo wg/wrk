@@ -382,18 +382,24 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 }
 
 static char *format_request(char *host, char *port, char *path, char **headers) {
-    char *req = NULL;
-
-    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
-    aprintf(&req, "Host: %s", host);
-    if (port) aprintf(&req, ":%s", port);
-    aprintf(&req, "\r\n");
+    char *req  = NULL;
+    char *head = NULL;
 
     for (char **h = headers; *h != NULL; h++) {
-        aprintf(&req, "%s\r\n", *h);
+        aprintf(&head, "%s\r\n", *h);
+        if (!strncasecmp(*h, "Host:", 5)) {
+            host = NULL;
+            port = NULL;
+        }
     }
 
-    aprintf(&req, "\r\n");
+    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
+    if (host) aprintf(&req, "Host: %s", host);
+    if (port) aprintf(&req, ":%s", port);
+    if (host) aprintf(&req, "\r\n");
+    aprintf(&req, "%s\r\n", head ? head : "");
+
+    free(head);
     return req;
 }
 
