@@ -33,6 +33,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    int reconnect;
 } cfg;
 
 static struct {
@@ -51,16 +52,17 @@ static const struct http_parser_settings parser_settings = {
 };
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"
-           "  Options:                                            \n"
-           "    -c, --connections <n>  Connections to keep open   \n"
-           "    -r, --requests    <n>  Total requests to make     \n"
-           "    -t, --threads     <n>  Number of threads to use   \n"
-           "                                                      \n"
-           "    -H, --header      <h>  Add header to request      \n"
-           "    -v, --version          Print version details      \n"
-           "                                                      \n"
-           "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
+    printf("Usage: wrk <options> <url>                             \n"
+           "  Options:                                             \n"
+           "    -c, --connections <n>  Connections to keep open    \n"
+           "    -r, --requests    <n>  Total requests to make      \n"
+           "    -t, --threads     <n>  Number of threads to use    \n"
+           "                                                       \n"
+           "    -R, --reconnect        Reconnect after each request\n"
+           "    -H, --header      <h>  Add header to request       \n"
+           "    -v, --version          Print version details       \n"
+           "                                                       \n"
+           "  Numeric arguments may include a SI unit (2k, 2M, 2G) \n");
 }
 
 int main(int argc, char **argv) {
@@ -293,7 +295,7 @@ static int request_complete(http_parser *parser) {
     }
 
     c->latency = time_us() - c->start;
-    if (!http_should_keep_alive(parser)) goto reconnect;
+    if (cfg.reconnect || !http_should_keep_alive(parser)) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
     aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
@@ -407,6 +409,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
+    { "reconnect",   no_argument,       NULL, 'R' },
     { "header",      required_argument, NULL, 'H' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -422,7 +425,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:RH:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -432,6 +435,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'R':
+                cfg->reconnect = !cfg->reconnect;
                 break;
             case 'H':
                 *header++ = optarg;
@@ -454,6 +460,8 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
     }
+
+    if (cfg->reconnect) *header++ = "Connection: close";
 
     *url    = argv[optind];
     *header = NULL;
