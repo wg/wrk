@@ -33,6 +33,7 @@ static struct config {
     uint64_t connections;
     uint64_t requests;
     uint64_t timeout;
+    uint64_t errors;
 } cfg;
 
 static struct {
@@ -59,6 +60,7 @@ static void usage() {
            "                                                      \n"
            "    -H, --header      <h>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
+           "        --errors      <n>  Abort after N errors       \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
 }
@@ -315,6 +317,16 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
         }
     }
 
+    uint64_t errors = 0;
+    errors += thread->errors.connect;
+    errors += thread->errors.read;
+    errors += thread->errors.write;
+    errors += thread->errors.timeout;
+
+    if (errors >= cfg.errors) {
+        aeStop(loop);
+    }
+
     return TIMEOUT_INTERVAL_MS;
 }
 
@@ -403,6 +415,7 @@ static struct option longopts[] = {
     { "requests",    required_argument, NULL, 'r' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "errors",      required_argument, NULL, 'E' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -417,7 +430,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->requests    = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:E:H:v?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -427,6 +440,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'r':
                 if (scan_metric(optarg, &cfg->requests)) return -1;
+                break;
+            case 'E':
+                if (scan_metric(optarg, &cfg->errors)) return -1;
                 break;
             case 'H':
                 *header++ = optarg;
@@ -448,6 +464,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
+    }
+
+    if (cfg->errors == 0) {
+        cfg->errors = cfg->requests / cfg->threads / 10;
     }
 
     *url    = argv[optind];

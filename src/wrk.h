@@ -11,7 +11,7 @@
 #include "http_parser.h"
 #include "tinymt64.h"
 
-#define VERSION  "1.1.0"
+#define VERSION  "1.2.0"
 #define RECVBUF  8192
 #define SAMPLES  100000
 
