@@ -184,7 +184,9 @@ int main(int argc, char **argv) {
     long double bytes_per_s = bytes      / runtime_s;
 
     print_stats_header();
+    stats_sort(statistics.latency);
     print_stats("Latency", statistics.latency, format_time_us);
+    stats_sort(statistics.requests);
     print_stats("Req/Sec", statistics.requests, format_metric);
 
     char *runtime_msg = format_time_us(runtime_us);
@@ -491,7 +493,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
 }
 
 static void print_stats_header() {
-    printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
+    printf("  Thread Stats%10s%13s%12s%11s%13s\n", "Avg", "Median", "Stdev", "Max", "+/- Stdev");
 }
 
 static void print_units(long double n, char *(*fmt)(long double), int width) {
@@ -509,12 +511,14 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     long double mean  = stats_mean(stats);
+    long double median  = stats_median(stats);
     long double max   = stats_max(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);
-    print_units(mean,  fmt, 8);
-    print_units(stdev, fmt, 10);
-    print_units(max,   fmt, 9);
-    printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+    print_units(mean,  fmt, 12);
+    print_units(median,  fmt, 12);
+    print_units(stdev, fmt, 12);
+    print_units(max,   fmt, 12);
+    printf("%9.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }

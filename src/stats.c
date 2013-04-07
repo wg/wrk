@@ -23,22 +23,26 @@ void stats_record(stats *stats, uint64_t x) {
     if (stats->index == stats->samples) stats->index = 0;
 }
 
+static int
+compare(const void *p1, const void *p2)
+{
+    if (*(const uint64_t *)p1 == *(const uint64_t *)p2) return 0;
+    if (*(const uint64_t *)p1 < *(const uint64_t *)p2) return -1;
+    return 1;
+}
+
+void stats_sort(stats *stats) {
+    qsort(stats->data, stats->limit, sizeof(uint64_t), compare);
+}
+
 uint64_t stats_min(stats *stats) {
-    uint64_t min = 0;
-    for (uint64_t i = 0; i < stats->limit; i++) {
-        uint64_t x = stats->data[i];
-        if (x < min || min == 0) min = x;
-    }
-    return min;
+    if (stats->limit == 0) return 0.0;
+    return stats->data[0];
 }
 
 uint64_t stats_max(stats *stats) {
-    uint64_t max = 0;
-    for (uint64_t i = 0; i < stats->limit; i++) {
-        uint64_t x = stats->data[i];
-        if (x > max || max == 0) max = x;
-    }
-    return max;
+    if (stats->limit == 0) return 0.0;
+    return stats->data[stats->limit - 1];
 }
 
 long double stats_mean(stats *stats) {
@@ -48,6 +52,11 @@ long double stats_mean(stats *stats) {
         sum += stats->data[i];
     }
     return sum / (long double) stats->limit;
+}
+
+long double stats_median(stats *stats) {
+  if (stats->limit == 0) return 0.0;
+  return stats->data[(int)(stats->limit / 2)];
 }
 
 long double stats_stdev(stats *stats, long double mean) {
