@@ -145,9 +145,6 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
-
     uint64_t start    = time_us();
     uint64_t complete = 0;
     uint64_t bytes    = 0;
@@ -172,13 +169,14 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
+    printf("\n");
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    printf("\n   %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -188,8 +186,8 @@ int main(int argc, char **argv) {
         printf("  Non-2xx or 3xx responses: %d\n", errors.status);
     }
 
-    printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    printf("\n   Requests/sec: \e[36m%9.2Lf\e[m\n", req_per_s);
+    printf("   Transfer/sec: \e[36m%8sB\e[m\n\n", format_binary(bytes_per_s));
 
     return 0;
 }
@@ -462,7 +460,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
 }
 
 static void print_stats_header() {
-    printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
+    printf("   Thread Stats%10s%15s%12s%15s\n", "Avg", "Stdev", "Max", "+/- Stdev");
 }
 
 static void print_units(long double n, char *(*fmt)(long double), int width) {
@@ -473,7 +471,7 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
     if (isalpha(msg[len-2])) pad--;
     width -= pad;
 
-    printf("%*.*s%.*s", width, width, msg, pad, "  ");
+    printf("\e[36m%*.*s%.*s\e[0m", width, width, msg, pad, "  ");
 
     free(msg);
 }
@@ -483,9 +481,9 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     long double max   = stats_max(stats);
     long double stdev = stats_stdev(stats, mean);
 
-    printf("    %-10s", name);
-    print_units(mean,  fmt, 8);
-    print_units(stdev, fmt, 10);
-    print_units(max,   fmt, 9);
-    printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+    printf("     %-10s", name);
+    print_units(mean,  fmt, 12);
+    print_units(stdev, fmt, 15);
+    print_units(max,   fmt, 12);
+    printf("\e[36m%10.2Lf%%\e[m\n", stats_within_stdev(stats, mean, stdev, 1));
 }
