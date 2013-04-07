@@ -104,14 +104,9 @@ int main(int argc, char **argv) {
     for (addr = addrs; addr != NULL; addr = addr->ai_next) {
         int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
         if (fd == -1) continue;
-        if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
-            if (errno == EHOSTUNREACH || errno == ECONNREFUSED) {
-                close(fd);
-                continue;
-            }
-        }
+        rc = connect(fd, addr->ai_addr, addr->ai_addrlen);
         close(fd);
-        break;
+        if (rc == 0) break;
     }
 
     if (addr == NULL) {
