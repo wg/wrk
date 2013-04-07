@@ -4,7 +4,7 @@ LIBS    := -lpthread -lm
 TARGET  := $(shell uname -s | tr [A-Z] [a-z] 2>/dev/null || echo unknown)
 
 ifeq ($(TARGET), sunos)
-	CFLAGS += -D_PTHREADS
+	CFLAGS += -D_PTHREADS -D_POSIX_C_SOURCE=200112L
 	LIBS   += -lsocket
 endif
 

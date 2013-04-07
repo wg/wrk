@@ -51,6 +51,12 @@ static const struct http_parser_settings parser_settings = {
     .on_message_complete = request_complete
 };
 
+static volatile sig_atomic_t stop = 0;
+
+static void handler(int sig) {
+    stop = 1;
+}
+
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
@@ -118,6 +124,7 @@ int main(int argc, char **argv) {
     }
 
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT,  SIG_IGN);
     cfg.addr     = *addr;
     request.buf  = format_request(host, port, path, headers);
     request.size = strlen(request.buf);
@@ -141,6 +148,13 @@ int main(int argc, char **argv) {
             exit(2);
         }
     }
+
+    struct sigaction sa = {
+        .sa_handler = handler,
+        .sa_flags   = 0,
+    };
+    sigfillset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, NULL);
 
     printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
@@ -323,7 +337,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     errors += thread->errors.write;
     errors += thread->errors.timeout;
 
-    if (errors >= cfg.errors) {
+    if (stop || errors >= cfg.errors) {
         aeStop(loop);
     }
 
