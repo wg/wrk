@@ -31,9 +31,8 @@ static struct config {
     struct addrinfo addr;
     uint64_t threads;
     uint64_t connections;
-    uint64_t requests;
+    uint64_t duration;
     uint64_t timeout;
-    uint64_t errors;
 } cfg;
 
 static struct {
@@ -60,15 +59,15 @@ static void handler(int sig) {
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
-           "    -c, --connections <n>  Connections to keep open   \n"
-           "    -r, --requests    <n>  Total requests to make     \n"
-           "    -t, --threads     <n>  Number of threads to use   \n"
+           "    -c, --connections <N>  Connections to keep open   \n"
+           "    -d, --duration    <T>  Duration of test           \n"
+           "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
-           "    -H, --header      <h>  Add header to request      \n"
+           "    -H, --header      <H>  Add header to request      \n"
            "    -v, --version          Print version details      \n"
-           "        --errors      <n>  Abort after N errors       \n"
            "                                                      \n"
-           "  Numeric arguments may include a SI unit (2k, 2M, 2G)\n");
+           "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
+           "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
 int main(int argc, char **argv) {
@@ -135,12 +134,12 @@ int main(int argc, char **argv) {
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
-    uint64_t requests    = cfg.requests    / cfg.threads;
+    uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         t->connections = connections;
-        t->requests    = requests;
+        t->stop_at     = stop_at;
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
@@ -156,7 +155,8 @@ int main(int argc, char **argv) {
     sigfillset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
 
-    printf("Making %"PRIu64" requests to %s\n", cfg.requests, url);
+    char *time = format_time_s(cfg.duration);
+    printf("Running %s test @ %s\n", time, url);
     printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
 
     uint64_t start    = time_us();
@@ -293,17 +293,20 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
 static int request_complete(http_parser *parser) {
     connection *c = parser->data;
     thread *thread = c->thread;
+    uint64_t now = time_us();
+
+    thread->complete++;
+    c->latency = now - c->start;
 
     if (parser->status_code > 399) {
         thread->errors.status++;
     }
 
-    if (++thread->complete >= thread->requests) {
+    if (now >= thread->stop_at) {
         aeStop(thread->loop);
         goto done;
     }
 
-    c->latency = time_us() - c->start;
     if (!http_should_keep_alive(parser)) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
@@ -321,9 +324,10 @@ static int request_complete(http_parser *parser) {
 
 static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
-    connection *c = thread->cs;
+    connection *c  = thread->cs;
+    uint64_t now   = time_us();
 
-    uint64_t maxAge = time_us() - (cfg.timeout * 1000);
+    uint64_t maxAge = now - (cfg.timeout * 1000);
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         if (maxAge > c->start) {
@@ -331,13 +335,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
         }
     }
 
-    uint64_t errors = 0;
-    errors += thread->errors.connect;
-    errors += thread->errors.read;
-    errors += thread->errors.write;
-    errors += thread->errors.timeout;
-
-    if (stop || errors >= cfg.errors) {
+    if (stop || now >= thread->stop_at) {
         aeStop(loop);
     }
 
@@ -426,10 +424,9 @@ static char *format_request(char *host, char *port, char *path, char **headers) 
 
 static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
-    { "requests",    required_argument, NULL, 'r' },
+    { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
-    { "errors",      required_argument, NULL, 'E' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -441,10 +438,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
     cfg->connections = 10;
-    cfg->requests    = 100;
+    cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:r:E:H:v?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:H:rv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -452,11 +449,8 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
                 break;
-            case 'r':
-                if (scan_metric(optarg, &cfg->requests)) return -1;
-                break;
-            case 'E':
-                if (scan_metric(optarg, &cfg->errors)) return -1;
+            case 'd':
+                if (scan_time(optarg, &cfg->duration)) return -1;
                 break;
             case 'H':
                 *header++ = optarg;
@@ -465,6 +459,8 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
                 break;
+            case 'r':
+                fprintf(stderr, "wrk 2.0.0+ uses -d instead of -r\n");
             case 'h':
             case '?':
             case ':':
@@ -473,15 +469,11 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         }
     }
 
-    if (optind == argc || !cfg->threads || !cfg->requests) return -1;
+    if (optind == argc || !cfg->threads || !cfg->duration) return -1;
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
-    }
-
-    if (cfg->errors == 0) {
-        cfg->errors = cfg->requests / cfg->threads / 10;
     }
 
     *url    = argv[optind];

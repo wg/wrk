@@ -6,14 +6,14 @@ wrk - a HTTP benchmarking tool
 
 Basic Usage
 
-  wrk -t8 -c400 -r10m http://localhost:8080/index.html
+  wrk -t8 -c400 -d30 http://localhost:8080/index.html
 
-  This runs wrk with 8 threads, keeping 400 connections open, and making a
-  total of 10 million HTTP GET requests to http://localhost:8080/index.html
+  This runs a benchmark for 30 seconds, using 8 threads, and keeping
+  400 HTTP connections open.
 
   Output:
 
-  Making 10000000 requests to http://localhost:8080/index.html
+  Running 30s test @ http://localhost:8080/index.html
     8 threads and 400 connections
     Thread Stats   Avg      Stdev     Max   +/- Stdev
       Latency   439.75us  350.49us   7.60ms   92.88%

@@ -11,7 +11,7 @@
 #include "http_parser.h"
 #include "tinymt64.h"
 
-#define VERSION  "1.2.0"
+#define VERSION  "2.0.0"
 #define RECVBUF  8192
 #define SAMPLES  100000
 
@@ -31,7 +31,7 @@ typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     uint64_t connections;
-    uint64_t requests;
+    uint64_t stop_at;
     uint64_t complete;
     uint64_t bytes;
     uint64_t start;
