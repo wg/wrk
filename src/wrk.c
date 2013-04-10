@@ -64,6 +64,7 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -H, --header      <H>  Add header to request      \n"
+           "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -427,6 +428,7 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -441,7 +443,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:H:rv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:H:T:rv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -454,6 +456,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'H':
                 *header++ = optarg;
+                break;
+            case 'T':
+                if (scan_time(optarg, &cfg->timeout)) return -1;
+                cfg->timeout *= 1000;
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
