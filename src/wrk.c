@@ -183,6 +183,7 @@ int main(int argc, char **argv) {
     long double runtime_s   = runtime_us / 1000000.0;
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
+    long double bytes_per_req = ((long double) bytes) / (long double) complete;
 
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
@@ -202,6 +203,7 @@ int main(int argc, char **argv) {
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+    printf("Bytes/req:    %9.2Lf\n", bytes_per_req);
 
     return 0;
 }
