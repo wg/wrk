@@ -23,27 +23,21 @@ void stats_record(stats *stats, uint64_t x) {
     if (stats->index == stats->samples) stats->index = 0;
 }
 
-uint64_t stats_min(stats *stats) {
-    uint64_t min = 0;
-    for (uint64_t i = 0; i < stats->limit; i++) {
-        uint64_t x = stats->data[i];
-        if (x < min || min == 0) min = x;
-    }
-    return min;
+static int stats_compare(const void *a, const void *b) {
+    uint64_t *x = (uint64_t *) a;
+    uint64_t *y = (uint64_t *) b;
+    return *x - *y;
 }
 
-uint64_t stats_max(stats *stats) {
-    uint64_t max = 0;
-    for (uint64_t i = 0; i < stats->limit; i++) {
-        uint64_t x = stats->data[i];
-        if (x > max || max == 0) max = x;
-    }
-    return max;
-}
+long double stats_summarize(stats *stats, int64_t *min, uint64_t *max) {
+    qsort(stats->data, stats->limit, sizeof(uint64_t), &stats_compare);
 
-long double stats_mean(stats *stats) {
-    uint64_t sum = 0;
+    if (min) *min = stats->data[0];
+    if (max) *max = stats->data[stats->limit - 1];
+
     if (stats->limit == 0) return 0.0;
+
+    uint64_t sum = 0;
     for (uint64_t i = 0; i < stats->limit; i++) {
         sum += stats->data[i];
     }
@@ -70,4 +64,9 @@ long double stats_within_stdev(stats *stats, long double mean, long double stdev
     }
 
     return (sum / (long double) stats->limit) * 100;
+}
+
+uint64_t stats_percentile(stats *stats, long double p) {
+    uint64_t rank = round((p / 100.0) * stats->limit + 0.5);
+    return stats->data[rank - 1];
 }

@@ -71,5 +71,6 @@ static char *format_request(char *, char *, char *, char **);
 static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
+static void print_stats_latency(stats *);
 
 #endif /* WRK_H */

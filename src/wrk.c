@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +34,7 @@ static struct config {
     uint64_t connections;
     uint64_t duration;
     uint64_t timeout;
+    bool     latency;
 } cfg;
 
 static struct {
@@ -64,6 +66,7 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -H, --header      <H>  Add header to request      \n"
+           "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -187,6 +190,7 @@ int main(int argc, char **argv) {
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
+    if (cfg.latency) print_stats_latency(statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
 
@@ -428,6 +432,7 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -443,7 +448,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:H:T:rv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -456,6 +461,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'H':
                 *header++ = optarg;
+                break;
+            case 'L':
+                cfg->latency = true;
                 break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
@@ -506,8 +514,8 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 }
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
-    long double mean  = stats_mean(stats);
-    long double max   = stats_max(stats);
+    uint64_t max;
+    long double mean  = stats_summarize(stats, NULL, &max);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);
@@ -515,4 +523,16 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     print_units(stdev, fmt, 10);
     print_units(max,   fmt, 9);
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
+}
+
+static void print_stats_latency(stats *stats) {
+    long double percentiles[] = { 50.0, 75.0, 90.0, 99.0 };
+    printf("  Latency Distribution\n");
+    for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
+        long double p = percentiles[i];
+        uint64_t n = stats_percentile(stats, p);
+        printf("%7.0Lf%%", p);
+        print_units(n, format_time_us, 10);
+        printf("\n");
+    }
 }
