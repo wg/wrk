@@ -249,16 +249,17 @@ static int connect_socket(thread *thread, connection *c) {
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
     if (connect(fd, addr.ai_addr, addr.ai_addrlen) == -1) {
-        if (errno != EINPROGRESS) {
-            thread->errors.connect++;
-            goto error;
-        }
+        if (errno != EINPROGRESS) goto error;
     }
 
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
 
     if (aeCreateFileEvent(loop, fd, AE_WRITABLE, socket_writeable, c) != AE_OK) {
+        goto error;
+    }
+
+    if (aeCreateFileEvent(loop, fd, AE_READABLE, socket_readable, c) != AE_OK) {
         goto error;
     }
 
@@ -269,6 +270,7 @@ static int connect_socket(thread *thread, connection *c) {
     return fd;
 
   error:
+    thread->errors.connect++;
     close(fd);
     return -1;
 }
@@ -315,7 +317,6 @@ static int request_complete(http_parser *parser) {
     if (!http_should_keep_alive(parser)) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
-    aeDeleteFileEvent(thread->loop, c->fd, AE_READABLE);
     aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
 
     goto done;
@@ -353,7 +354,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     if (write(fd, request.buf, request.size) < request.size) goto error;
     c->start = time_us();
     aeDeleteFileEvent(loop, fd, AE_WRITABLE);
-    aeCreateFileEvent(loop, fd, AE_READABLE, socket_readable, c);
 
     return;
 
