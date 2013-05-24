@@ -38,9 +38,11 @@ static struct config {
 } cfg;
 
 static struct {
+    char *method;
+    char *body;
     size_t size;
     char *buf;
-} request;
+} req;
 
 static struct {
     stats *latency;
@@ -66,6 +68,8 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -H, --header      <H>  Add header to request      \n"
+           "    -M, --method      <M>  HTTP method                \n"
+           "        --body        <B>  Request body               \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
@@ -128,9 +132,9 @@ int main(int argc, char **argv) {
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
-    cfg.addr     = *addr;
-    request.buf  = format_request(host, port, path, headers);
-    request.size = strlen(request.buf);
+    cfg.addr = *addr;
+    req.buf  = format_request(host, port, path, headers);
+    req.size = strlen(req.buf);
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -351,7 +355,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
 
-    if (write(fd, request.buf, request.size) < request.size) goto error;
+    if (write(fd, req.buf, req.size) < req.size) goto error;
     c->start = time_us();
     aeDeleteFileEvent(loop, fd, AE_WRITABLE);
 
@@ -406,7 +410,7 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 }
 
 static char *format_request(char *host, char *port, char *path, char **headers) {
-    char *req  = NULL;
+    char *buf  = NULL;
     char *head = NULL;
 
     for (char **h = headers; *h != NULL; h++) {
@@ -417,14 +421,21 @@ static char *format_request(char *host, char *port, char *path, char **headers) 
         }
     }
 
-    aprintf(&req, "GET %s HTTP/1.1\r\n", path);
-    if (host) aprintf(&req, "Host: %s", host);
-    if (port) aprintf(&req, ":%s", port);
-    if (host) aprintf(&req, "\r\n");
-    aprintf(&req, "%s\r\n", head ? head : "");
+    if (req.body) {
+        size_t len = strlen(req.body);
+        aprintf(&head, "Content-Length: %zd\r\n", len);
+    }
+
+    aprintf(&buf, "%s %s HTTP/1.1\r\n", req.method, path);
+    if (host) aprintf(&buf, "Host: %s", host);
+    if (port) aprintf(&buf, ":%s", port);
+    if (host) aprintf(&buf, "\r\n");
+
+    aprintf(&buf, "%s\r\n", head ? head : "");
+    aprintf(&buf, "%s", req.body ? req.body : "");
 
     free(head);
-    return req;
+    return buf;
 }
 
 static struct option longopts[] = {
@@ -432,6 +443,8 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "header",      required_argument, NULL, 'H' },
+    { "method",      required_argument, NULL, 'M' },
+    { "body",        required_argument, NULL, 'B' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
@@ -447,8 +460,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    req.method       = "GET";
 
-    while ((c = getopt_long(argc, argv, "t:c:d:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:H:M:B:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -461,6 +475,12 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'H':
                 *header++ = optarg;
+                break;
+            case 'M':
+                req.method = optarg;
+                break;
+            case 'B':
+                req.body = optarg;
                 break;
             case 'L':
                 cfg->latency = true;
