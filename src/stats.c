@@ -8,17 +8,27 @@
 #include "zmalloc.h"
 
 stats *stats_alloc(uint64_t samples) {
-    stats *stats = zcalloc(sizeof(stats) + sizeof(uint64_t) * samples);
-    stats->samples = samples;
-    return stats;
+    stats *s = zcalloc(sizeof(stats) + sizeof(uint64_t) * samples);
+    s->samples = samples;
+    s->min     = UINT64_MAX;
+    return s;
 }
 
 void stats_free(stats *stats) {
     zfree(stats);
 }
 
+void stats_reset(stats *stats) {
+    stats->limit = 0;
+    stats->index = 0;
+    stats->min   = UINT64_MAX;
+    stats->max   = 0;
+}
+
 void stats_record(stats *stats, uint64_t x) {
     stats->data[stats->index++] = x;
+    if (x < stats->min) stats->min = x;
+    if (x > stats->max) stats->max = x;
     if (stats->limit < stats->samples)  stats->limit++;
     if (stats->index == stats->samples) stats->index = 0;
 }
@@ -29,11 +39,8 @@ static int stats_compare(const void *a, const void *b) {
     return *x - *y;
 }
 
-long double stats_summarize(stats *stats, int64_t *min, uint64_t *max) {
+long double stats_summarize(stats *stats) {
     qsort(stats->data, stats->limit, sizeof(uint64_t), &stats_compare);
-
-    if (min) *min = stats->data[0];
-    if (max) *max = stats->data[stats->limit - 1];
 
     if (stats->limit == 0) return 0.0;
 
@@ -69,4 +76,20 @@ long double stats_within_stdev(stats *stats, long double mean, long double stdev
 uint64_t stats_percentile(stats *stats, long double p) {
     uint64_t rank = round((p / 100.0) * stats->limit + 0.5);
     return stats->data[rank - 1];
+}
+
+void stats_sample(stats *dst, tinymt64_t *state, uint64_t count, stats *src) {
+    for (uint64_t i = 0; i < count; i++) {
+        uint64_t n = rand64(state, src->limit);
+        stats_record(dst, src->data[n]);
+    }
+}
+
+uint64_t rand64(tinymt64_t *state, uint64_t n) {
+    uint64_t x, max = ~UINT64_C(0);
+    max -= max % n;
+    do {
+        x = tinymt64_generate_uint64(state);
+    } while (x >= max);
+    return x % n;
 }

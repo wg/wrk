@@ -221,16 +221,16 @@ void *thread_main(void *arg) {
     thread->cs   = zmalloc(thread->connections * sizeof(connection));
     thread->loop = loop;
     tinymt64_init(&thread->rand, time_us());
+    thread->latency = stats_alloc(100000);
 
     connection *c = thread->cs;
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
-        c->thread  = thread;
-        c->latency = 0;
+        c->thread = thread;
         connect_socket(thread, c);
     }
 
-    aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
+    aeCreateTimeEvent(loop, CALIBRATE_DELAY_MS, calibrate, thread, NULL);
     aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
     thread->start = time_us();
@@ -238,6 +238,15 @@ void *thread_main(void *arg) {
 
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
+
+    uint64_t max = thread->latency->max;
+    stats_free(thread->latency);
+
+    pthread_mutex_lock(&statistics.mutex);
+    for (uint64_t i = 0; i < thread->missed; i++) {
+        stats_record(statistics.latency, max);
+    }
+    pthread_mutex_unlock(&statistics.mutex);
 
     return NULL;
 }
@@ -285,20 +294,45 @@ static int reconnect_socket(thread *thread, connection *c) {
     return connect_socket(thread, c);
 }
 
+static int calibrate(aeEventLoop *loop, long long id, void *data) {
+    thread *thread = data;
+
+    uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
+    uint64_t req_per_ms = thread->requests / elapsed_ms;
+
+    if (!req_per_ms) return CALIBRATE_DELAY_MS / 2;
+
+    thread->rate  = (req_per_ms * SAMPLE_INTERVAL_MS) / 10;
+    thread->start = time_us();
+    thread->requests = 0;
+    stats_reset(thread->latency);
+
+    aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
+
+    return AE_NOMORE;
+}
+
 static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
-    uint64_t n = rand64(&thread->rand, thread->connections);
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    connection *c = thread->cs + n;
-    uint64_t requests = (thread->complete / elapsed_ms) * 1000;
+    uint64_t requests = (thread->requests / elapsed_ms) * 1000;
+    uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->limit);
+    uint64_t count = thread->rate - missed;
 
     pthread_mutex_lock(&statistics.mutex);
-    stats_record(statistics.latency,  c->latency);
+    stats_sample(statistics.latency, &thread->rand, count, thread->latency);
     stats_record(statistics.requests, requests);
     pthread_mutex_unlock(&statistics.mutex);
 
-    return SAMPLE_INTERVAL_MS + rand64(&thread->rand, SAMPLE_INTERVAL_MS);
+    uint64_t max = thread->latency->max;
+    thread->missed  += missed;
+    thread->requests = 0;
+    thread->start    = time_us();
+    stats_reset(thread->latency);
+    thread->latency->max = max;
+
+    return SAMPLE_INTERVAL_MS;
 }
 
 static int request_complete(http_parser *parser) {
@@ -307,7 +341,9 @@ static int request_complete(http_parser *parser) {
     uint64_t now = time_us();
 
     thread->complete++;
-    c->latency = now - c->start;
+    thread->requests++;
+
+    stats_record(thread->latency, now - c->start);
 
     if (parser->status_code > 399) {
         thread->errors.status++;
@@ -385,15 +421,6 @@ static uint64_t time_us() {
     struct timeval t;
     gettimeofday(&t, NULL);
     return (t.tv_sec * 1000000) + t.tv_usec;
-}
-
-static uint64_t rand64(tinymt64_t *state, uint64_t n) {
-    uint64_t x, max = ~UINT64_C(0);
-    max -= max % n;
-    do {
-        x = tinymt64_generate_uint64(state);
-    } while (x >= max);
-    return x % n;
 }
 
 static char *extract_url_part(char *url, struct http_parser_url *parser_url, enum http_parser_url_fields field) {
@@ -534,8 +561,8 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 }
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
-    uint64_t max;
-    long double mean  = stats_summarize(stats, NULL, &max);
+    uint64_t max = stats->max;
+    long double mean  = stats_summarize(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);
