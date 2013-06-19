@@ -270,6 +270,16 @@ static int connect_socket(thread *thread, connection *c) {
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
 
+    int size = 0;
+    socklen_t len = sizeof(size);
+    getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, &len);
+    size += req.size * cfg.pipeline;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size))) {
+        char *cause = strerror(errno);
+        fprintf(stderr, "unable to increase sndbuf to %d: %s\n", size, cause);
+    }
+
     if (aeCreateFileEvent(loop, fd, AE_WRITABLE, socket_writeable, c) != AE_OK) {
         goto error;
     }
