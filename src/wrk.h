@@ -51,6 +51,8 @@ typedef struct connection {
     int fd;
     uint64_t start;
     uint64_t pending;
+    // offset into req.size for the start of the unwritten bytes of this batch
+    int write_offset;
     char buf[RECVBUF];
 } connection;
 
@@ -64,6 +66,7 @@ static int calibrate(aeEventLoop *, long long, void *);
 static int sample_rate(aeEventLoop *, long long, void *);
 static int check_timeouts(aeEventLoop *, long long, void *);
 
+static int write_batch(connection *c);
 static void socket_writeable(aeEventLoop *, int, void *, int);
 static void socket_readable(aeEventLoop *, int, void *, int);
 static int request_complete(http_parser *);
