@@ -135,8 +135,13 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
     cfg.addr = *addr;
-    req.buf  = format_request(host, port, path, headers);
-    req.size = strlen(req.buf);
+    char *one_request = format_request(host, port, path, headers);
+    size_t one_req_size = strlen(one_request);
+    req.size = one_req_size * cfg.pipeline;
+    req.buf = malloc(req.size);
+    for (int i = 0; i < cfg.pipeline; i++)
+        memcpy(req.buf + i * one_req_size, one_request, one_req_size);
+    free(one_request);
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -280,7 +285,9 @@ static int connect_socket(thread *thread, connection *c) {
         fprintf(stderr, "unable to increase sndbuf to %d: %s\n", size, cause);
     }
 
-    if (aeCreateFileEvent(loop, fd, AE_WRITABLE, socket_writeable, c) != AE_OK) {
+    c->fd = fd;
+
+    if (write_batch(c) != AE_OK) {
         goto error;
     }
 
@@ -290,7 +297,6 @@ static int connect_socket(thread *thread, connection *c) {
 
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->parser.data = c;
-    c->fd = fd;
 
     return fd;
 
@@ -368,9 +374,7 @@ static int request_complete(http_parser *parser) {
     if (!http_should_keep_alive(parser)) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
-    if (c->pending == 0) {
-        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-    }
+    if (c->pending == 0) write_batch(c);
 
     goto done;
 
@@ -401,16 +405,24 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     return TIMEOUT_INTERVAL_MS;
 }
 
+static int write_batch(connection *c) {
+    c->pending = cfg.pipeline;
+    c->write_offset = 0;
+    return aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+}
+
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
 
-    c->start = time_us();
+    // writing starts now
+    if (c->write_offset == 0) c->start = time_us();
 
-    for (c->pending = 0; c->pending < cfg.pipeline; c->pending++) {
-        if (write(fd, req.buf, req.size) < req.size) goto error;
-    }
+    int remaining = req.size - c->write_offset;
+    int written = write(fd, req.buf + c->write_offset, remaining);
 
-    aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+    if (written < 0) goto error;
+    else if (written == remaining) aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+    else c->write_offset += written;
 
     return;
 
