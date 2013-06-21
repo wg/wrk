@@ -50,6 +50,7 @@ typedef struct connection {
     http_parser parser;
     int fd;
     uint64_t start;
+    size_t written;
     char buf[RECVBUF];
 } connection;
 

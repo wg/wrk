@@ -279,6 +279,7 @@ static int connect_socket(thread *thread, connection *c) {
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->parser.data = c;
     c->fd = fd;
+    c->written = 0;
 
     return fd;
 
@@ -390,10 +391,17 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
+    size_t len = req.size - c->written;
+    ssize_t n;
 
-    if (write(fd, req.buf, req.size) < req.size) goto error;
-    c->start = time_us();
-    aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+    if ((n = write(fd, req.buf + c->written, len)) < 0) goto error;
+    if (!c->written) c->start = time_us();
+
+    c->written += n;
+    if (c->written == req.size) {
+        c->written = 0;
+        aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+    }
 
     return;
 
