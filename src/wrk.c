@@ -1,32 +1,7 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
 #include "wrk.h"
-
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <math.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/uio.h>
-
-#include "aprintf.h"
-#include "stats.h"
-#include "units.h"
-#include "zmalloc.h"
-#include "tinymt64.h"
+#include "main.h"
 
 static struct config {
     struct addrinfo addr;
@@ -35,6 +10,7 @@ static struct config {
     uint64_t duration;
     uint64_t timeout;
     bool     latency;
+    SSL_CTX *ctx;
 } cfg;
 
 static struct {
@@ -49,6 +25,13 @@ static struct {
     stats *requests;
     pthread_mutex_t mutex;
 } statistics;
+
+static struct sock sock = {
+    .connect = sock_connect,
+    .close   = sock_close,
+    .read    = sock_read,
+    .write   = sock_write
+};
 
 static const struct http_parser_settings parser_settings = {
     .on_message_complete = request_complete
@@ -96,10 +79,11 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    char *host = extract_url_part(url, &parser_url, UF_HOST);
-    char *port = extract_url_part(url, &parser_url, UF_PORT);
-    char *service = port ? port : extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *path = "/";
+    char *schema  = extract_url_part(url, &parser_url, UF_SCHEMA);
+    char *host    = extract_url_part(url, &parser_url, UF_HOST);
+    char *port    = extract_url_part(url, &parser_url, UF_PORT);
+    char *service = port ? port : schema;
+    char *path    = "/";
 
     if (parser_url.field_set & (1 << UF_PATH)) {
         path = &url[parser_url.field_data[UF_PATH].off];
@@ -128,6 +112,18 @@ int main(int argc, char **argv) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
         exit(1);
+    }
+
+    if (!strncmp("https", schema, 5)) {
+        if ((cfg.ctx = ssl_init()) == NULL) {
+            fprintf(stderr, "unable to initialize SSL\n");
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
+        sock.connect = ssl_connect;
+        sock.close   = ssl_close;
+        sock.read    = ssl_read;
+        sock.write   = ssl_write;
     }
 
     signal(SIGPIPE, SIG_IGN);
@@ -227,6 +223,7 @@ void *thread_main(void *arg) {
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread = thread;
+        c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         connect_socket(thread, c);
     }
 
@@ -268,20 +265,12 @@ static int connect_socket(thread *thread, connection *c) {
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
 
-    if (aeCreateFileEvent(loop, fd, AE_WRITABLE, socket_writeable, c) != AE_OK) {
-        goto error;
+    flags = AE_READABLE | AE_WRITABLE;
+    if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
+        c->parser.data = c;
+        c->fd = fd;
+        return fd;
     }
-
-    if (aeCreateFileEvent(loop, fd, AE_READABLE, socket_readable, c) != AE_OK) {
-        goto error;
-    }
-
-    http_parser_init(&c->parser, HTTP_RESPONSE);
-    c->parser.data = c;
-    c->fd = fd;
-    c->written = 0;
-
-    return fd;
 
   error:
     thread->errors.connect++;
@@ -291,6 +280,7 @@ static int connect_socket(thread *thread, connection *c) {
 
 static int reconnect_socket(thread *thread, connection *c) {
     aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
+    sock.close(c);
     close(c->fd);
     return connect_socket(thread, c);
 }
@@ -389,12 +379,40 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
     return TIMEOUT_INTERVAL_MS;
 }
 
+static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
+    connection *c = data;
+
+    switch (sock.connect(c)) {
+        case OK:    break;
+        case ERROR: goto error;
+        case RETRY: return;
+    }
+
+    http_parser_init(&c->parser, HTTP_RESPONSE);
+    c->written = 0;
+
+    aeCreateFileEvent(c->thread->loop, c->fd, AE_READABLE, socket_readable, c);
+    aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+
+    return;
+
+  error:
+    c->thread->errors.connect++;
+    reconnect_socket(c->thread, c);
+
+}
+
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     size_t len = req.size - c->written;
-    ssize_t n;
+    size_t n;
 
-    if ((n = write(fd, req.buf + c->written, len)) < 0) goto error;
+    switch (sock.write(c, req.buf + c->written, len, &n)) {
+        case OK:    break;
+        case ERROR: goto error;
+        case RETRY: return;
+    }
+
     if (!c->written) c->start = time_us();
 
     c->written += n;
@@ -410,11 +428,17 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     reconnect_socket(c->thread, c);
 }
 
+
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-    ssize_t n;
+    size_t n;
 
-    if ((n = read(fd, c->buf, sizeof(c->buf))) <= 0) goto error;
+    switch (sock.read(c, &n)) {
+        case OK:    break;
+        case ERROR: goto error;
+        case RETRY: return;
+    }
+
     if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
     c->thread->bytes += n;
 
