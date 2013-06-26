@@ -13,7 +13,7 @@
 #include "ae.h"
 #include "http_parser.h"
 
-#define VERSION  "2.2.0"
+#define VERSION  "2.2.1"
 #define RECVBUF  8192
 #define SAMPLES  100000000
 

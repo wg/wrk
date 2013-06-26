@@ -289,7 +289,7 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    uint64_t req_per_ms = thread->requests / elapsed_ms;
+    uint64_t req_per_ms = ceil(thread->requests / (double) elapsed_ms);
 
     if (!req_per_ms) return CALIBRATE_DELAY_MS / 2;
 
@@ -307,7 +307,7 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    uint64_t requests = (thread->requests / elapsed_ms) * 1000;
+    uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
     uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->limit);
     uint64_t count = thread->rate - missed;
 
