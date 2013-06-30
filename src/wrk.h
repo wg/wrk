@@ -13,12 +13,11 @@
 #include "ae.h"
 #include "http_parser.h"
 
-#define VERSION  "2.2.1"
+#define VERSION  "2.2.2"
 #define RECVBUF  8192
 #define SAMPLES  100000000
 
 #define SOCKET_TIMEOUT_MS   2000
-#define SAMPLE_INTERVAL_MS  10
 #define CALIBRATE_DELAY_MS  500
 #define TIMEOUT_INTERVAL_MS 2000
 
@@ -34,6 +33,7 @@ typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     uint64_t connections;
+    int interval;
     uint64_t stop_at;
     uint64_t complete;
     uint64_t requests;

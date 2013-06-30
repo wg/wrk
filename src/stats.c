@@ -25,6 +25,11 @@ void stats_reset(stats *stats) {
     stats->max   = 0;
 }
 
+void stats_rewind(stats *stats) {
+    stats->limit = 0;
+    stats->index = 0;
+}
+
 void stats_record(stats *stats, uint64_t x) {
     stats->data[stats->index++] = x;
     if (x < stats->min) stats->min = x;

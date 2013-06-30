@@ -288,17 +288,20 @@ static int reconnect_socket(thread *thread, connection *c) {
 static int calibrate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
-    uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    uint64_t req_per_ms = ceil(thread->requests / (double) elapsed_ms);
+    (void) stats_summarize(thread->latency);
+    long double latency = stats_percentile(thread->latency, 90.0) / 1000.0L;
+    long double interval = MAX(latency * 2, 10);
+    long double rate = (interval / latency) * thread->connections;
 
-    if (!req_per_ms) return CALIBRATE_DELAY_MS / 2;
+    if (latency == 0) return CALIBRATE_DELAY_MS;
 
-    thread->rate  = (req_per_ms * SAMPLE_INTERVAL_MS) / 10;
-    thread->start = time_us();
+    thread->interval = interval;
+    thread->rate     = ceil(rate / 10);
+    thread->start    = time_us();
     thread->requests = 0;
     stats_reset(thread->latency);
 
-    aeCreateTimeEvent(loop, SAMPLE_INTERVAL_MS, sample_rate, thread, NULL);
+    aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
 
     return AE_NOMORE;
 }
@@ -316,14 +319,12 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     stats_record(statistics.requests, requests);
     pthread_mutex_unlock(&statistics.mutex);
 
-    uint64_t max = thread->latency->max;
     thread->missed  += missed;
     thread->requests = 0;
     thread->start    = time_us();
-    stats_reset(thread->latency);
-    thread->latency->max = max;
+    stats_rewind(thread->latency);
 
-    return SAMPLE_INTERVAL_MS;
+    return thread->interval;
 }
 
 static int request_complete(http_parser *parser) {
