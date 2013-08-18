@@ -11,6 +11,7 @@
 
 #include "stats.h"
 #include "ae.h"
+#include "script.h"
 #include "http_parser.h"
 
 #define VERSION  "2.2.2"
@@ -43,6 +44,7 @@ typedef struct {
     uint64_t missed;
     stats *latency;
     tinymt64_t rand;
+    lua_State *L;
     errors errors;
     struct connection *cs;
 } thread;
@@ -53,6 +55,8 @@ typedef struct connection {
     int fd;
     SSL *ssl;
     uint64_t start;
+    char *request;
+    size_t length;
     size_t written;
     char buf[RECVBUF];
 } connection;

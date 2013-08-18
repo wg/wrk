@@ -22,6 +22,42 @@ Basic Usage
   Requests/sec: 748868.53
   Transfer/sec:    606.33MB
 
+Scripting
+
+  The "scripted" branch of wrk includes LuaJIT and a Lua script may be
+  used to perform minor alterations to the default HTTP request or even
+  even generate a completely new HTTP request each time. Per-request
+  actions, particularly building a new HTTP request, will necessarily
+  reduce the amount of load that can be generated.
+
+  wrk's public Lua API is:
+
+    init    = function()
+    request = function()
+
+    wrk = {
+      scheme  = "http",
+      host    = "localhost",
+      port    = nil,
+      method  = "GET",
+      path    = "/",
+      headers = {},
+      body    = nil
+    }
+
+    function wrk.format(method, path, headers, body)
+
+      wrk.format returns a HTTP request string containing the passed
+      parameters merged with values from the wrk table.
+
+    global init    - function to be called when the thread is initialized
+    global request - function returning the HTTP message for each request
+
+  A user script that only changes the HTTP method, path, adds headers or
+  a body, will have no performance impact. If multiple HTTP requests are
+  necessary they should be generated in the call to init() and returned
+  via a quick lookup in the request() call.
+
 Benchmarking Tips
 
   The machine running wrk must have a sufficient number of ephemeral ports
@@ -32,6 +68,6 @@ Benchmarking Tips
 Acknowledgements
 
   wrk contains code from a number of open source projects including the
-  'ae' event loop from redis, the nginx/joyent/node.js 'http-parser' and
-  the Tiny Mersenne Twister PRNG. Please consult the NOTICE file for
-  licensing details.
+  'ae' event loop from redis, the nginx/joyent/node.js 'http-parser',
+  Mike Pall's LuaJIT, and the Tiny Mersenne Twister PRNG. Please consult
+  the NOTICE file for licensing details.

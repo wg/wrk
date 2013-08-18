@@ -45,7 +45,6 @@ static int request_complete(http_parser *);
 static uint64_t time_us();
 
 static char *extract_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
-static char *format_request(char *, char *, char *, char **);
 
 static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
