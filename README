@@ -4,6 +4,11 @@ wrk - a HTTP benchmarking tool
   load when run on a single multi-core CPU. It combines a multithreaded
   design with scalable event notification systems such as epoll and kqueue.
 
+  This "scripted" branch of wrk includes LuaJIT and a Lua script may be
+  used to perform minor alterations to the default HTTP request or even
+  even generate a completely new HTTP request each time. The script may
+  also perform custom reporting at the end of a run.
+
 Basic Usage
 
   wrk -t12 -c400 -d30s http://127.0.0.1:8080/index.html
@@ -24,16 +29,11 @@ Basic Usage
 
 Scripting
 
-  The "scripted" branch of wrk includes LuaJIT and a Lua script may be
-  used to perform minor alterations to the default HTTP request or even
-  even generate a completely new HTTP request each time. Per-request
-  actions, particularly building a new HTTP request, will necessarily
-  reduce the amount of load that can be generated.
-
   wrk's public Lua API is:
 
-    init    = function()
+    init    = function(args)
     request = function()
+    done    = function(summary, latency, requests)
 
     wrk = {
       scheme  = "http",
@@ -50,13 +50,37 @@ Scripting
       wrk.format returns a HTTP request string containing the passed
       parameters merged with values from the wrk table.
 
-    global init    - function to be called when the thread is initialized
-    global request - function returning the HTTP message for each request
+    global init    -- function to be called when the thread is initialized
+    global request -- function returning the HTTP message for each request
+    global done    -- optional function to be called with results of run
 
-  A user script that only changes the HTTP method, path, adds headers or
-  a body, will have no performance impact. If multiple HTTP requests are
-  necessary they should be generated in the call to init() and returned
-  via a quick lookup in the request() call.
+  The init() function receives any extra command line arguments for the
+  script. Script arguments must be separated from wrk arguments with "--"
+  and scripts that override init() but not request() must call wrk.init()
+
+  The done() function receives a table containing result data, and two
+  statistics objects representing the sampled per-request latency and
+  per-thread request rate. Duration and latency are microsecond values
+  and rate is measured in requests per second.
+
+    latency.min              -- minimum value seen
+    latency.max              -- maximum value seen
+    latency.mean             -- average value seen
+    latency.stdev            -- standard deviation
+    latency:percentile(99.0) -- 99th percentile value
+
+    summary = {
+      duration = N,  -- run duration in microseconds
+      requests = N,  -- total completed requests
+      bytes    = N,  -- total bytes received
+      errors   = {
+        connect = N, -- total socket connection errors
+        read    = N, -- total socket read errors
+        write   = N, -- total socket write errors
+        status  = N, -- total HTTP status codes > 399
+        timeout = N  -- total request timeouts
+      }
+    }
 
 Benchmarking Tips
 
@@ -64,6 +88,12 @@ Benchmarking Tips
   available and closed sockets should be recycled quickly. To handle the
   initial connection burst the server's listen(2) backlog should be greater
   than the number of concurrent connections being tested.
+
+  A user script that only changes the HTTP method, path, adds headers or
+  a body, will have no performance impact. If multiple HTTP requests are
+  necessary they should be pre-generated and returned via a quick lookup in
+  the request() call. Per-request actions, particularly building a new HTTP
+  request, will necessarily reduce the amount of load that can be generated.
 
 Acknowledgements
 

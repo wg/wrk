@@ -30,10 +30,11 @@ function wrk.format(method, path, headers, body)
    return table.concat(s, "\r\n")
 end
 
-function wrk.init()    req = wrk.format() end
-function wrk.request() return req         end
+function wrk.init(args) req = wrk.format() end
+function wrk.request()  return req         end
 
 init    = wrk.init
 request = wrk.request
+done    = nil
 
 return wrk

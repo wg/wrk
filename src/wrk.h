@@ -23,14 +23,6 @@
 #define TIMEOUT_INTERVAL_MS 2000
 
 typedef struct {
-    uint32_t connect;
-    uint32_t read;
-    uint32_t write;
-    uint32_t status;
-    uint32_t timeout;
-} errors;
-
-typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     uint64_t connections;

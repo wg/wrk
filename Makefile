@@ -8,7 +8,11 @@ ifeq ($(TARGET), sunos)
 	LIBS   += -lsocket
 else ifeq ($(TARGET), darwin)
 	LDFLAGS += -pagezero_size 10000 -image_base 100000000
-else
+else ifeq ($(TARGET), linux)
+	LIBS    += -ldl
+	LDFLAGS += -Wl,-E
+else ifeq ($(TARGET), freebsd)
+	CFLAGS  += -D_DECLARE_C99_LDBL_MATH
 	LDFLAGS += -Wl,-E
 endif
 
@@ -20,8 +24,9 @@ ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC))
 
 LDIR     = deps/luajit/src
+LIBS    := -lluajit $(LIBS)
 CFLAGS  += -I $(LDIR)
-LDFLAGS += -L $(LDIR) -lluajit
+LDFLAGS += -L $(LDIR)
 
 all: $(BIN)
 
@@ -39,7 +44,7 @@ $(ODIR): $(LDIR)/libluajit.a
 
 $(ODIR)/bytecode.o: scripts/wrk.lua
 	@echo LUAJIT $<
-	@$(SHELL) -c 'cd $(LDIR) && luajit -b $(PWD)/$< $(PWD)/$@'
+	@$(SHELL) -c 'cd $(LDIR) && ./luajit -b $(PWD)/$< $(PWD)/$@'
 
 $(ODIR)/%.o : %.c
 	@echo CC $<

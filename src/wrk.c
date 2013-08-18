@@ -130,15 +130,17 @@ int main(int argc, char **argv) {
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
+    lua_State *L         = NULL;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         t->connections = connections;
         t->stop_at     = stop_at;
 
-        t->L = script_create(schema, host, (int) strtol(port, NULL, 10), path);
+        t->L = script_create(schema, host, port, path);
         script_headers(t->L, headers);
-        script_init(t->L, cfg.script);
+        script_init(t->L, cfg.script, argc - optind, &argv[optind]);
+        if (L == NULL) L = t->L;
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
@@ -201,6 +203,12 @@ int main(int argc, char **argv) {
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+
+    if (script_has_done(L)) {
+        script_summary(L, runtime_us, complete, bytes);
+        script_errors(L, &errors);
+        script_done(L, statistics.latency, statistics.requests);
+    }
 
     return 0;
 }

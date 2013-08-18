@@ -46,7 +46,10 @@ static int stats_compare(const void *a, const void *b) {
 
 long double stats_summarize(stats *stats) {
     qsort(stats->data, stats->limit, sizeof(uint64_t), &stats_compare);
+    return stats_mean(stats);
+}
 
+long double stats_mean(stats *stats) {
     if (stats->limit == 0) return 0.0;
 
     uint64_t sum = 0;
