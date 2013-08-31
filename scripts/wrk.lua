@@ -33,8 +33,9 @@ end
 function wrk.init(args) req = wrk.format() end
 function wrk.request()  return req         end
 
-init    = wrk.init
-request = wrk.request
-done    = nil
+init     = wrk.init
+request  = wrk.request
+response = nil
+done     = nil
 
 return wrk

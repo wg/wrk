@@ -10,6 +10,7 @@ static struct config {
     uint64_t duration;
     uint64_t timeout;
     bool     latency;
+    bool     dynamic;
     char    *script;
     SSL_CTX *ctx;
 } cfg;
@@ -27,8 +28,8 @@ static struct sock sock = {
     .write   = sock_write
 };
 
-static const struct http_parser_settings parser_settings = {
-    .on_message_complete = request_complete
+static struct http_parser_settings parser_settings = {
+    .on_message_complete = response_complete
 };
 
 static volatile sig_atomic_t stop = 0;
@@ -130,7 +131,6 @@ int main(int argc, char **argv) {
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
     uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
-    lua_State *L         = NULL;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
@@ -140,7 +140,15 @@ int main(int argc, char **argv) {
         t->L = script_create(schema, host, port, path);
         script_headers(t->L, headers);
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
-        if (L == NULL) L = t->L;
+
+        if (i == 0) {
+            cfg.dynamic = !script_is_static(t->L);
+            if (script_want_response(t->L)) {
+                parser_settings.on_header_field = header_field;
+                parser_settings.on_header_value = header_value;
+                parser_settings.on_body         = response_body;
+            }
+        }
 
         if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
@@ -204,6 +212,7 @@ int main(int argc, char **argv) {
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
+    lua_State *L = threads[0].L;
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
@@ -225,9 +234,8 @@ void *thread_main(void *arg) {
     char *request = NULL;
     size_t length = 0;
 
-    if (script_is_static(thread->L)) {
+    if (!cfg.dynamic) {
         script_request(thread->L, &request, &length);
-        thread->L = NULL;
     }
 
     connection *c = thread->cs;
@@ -340,18 +348,51 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     return thread->interval;
 }
 
-static int request_complete(http_parser *parser) {
+static int header_field(http_parser *parser, const char *at, size_t len) {
+    connection *c = parser->data;
+    if (c->state == VALUE) {
+        *c->headers.cursor++ = '\0';
+        c->state = FIELD;
+    }
+    buffer_append(&c->headers, at, len);
+    return 0;
+}
+
+static int header_value(http_parser *parser, const char *at, size_t len) {
+    connection *c = parser->data;
+    if (c->state == FIELD) {
+        *c->headers.cursor++ = '\0';
+        c->state = VALUE;
+    }
+    buffer_append(&c->headers, at, len);
+    return 0;
+}
+
+static int response_body(http_parser *parser, const char *at, size_t len) {
+    connection *c = parser->data;
+    buffer_append(&c->body, at, len);
+    return 0;
+}
+
+static int response_complete(http_parser *parser) {
     connection *c = parser->data;
     thread *thread = c->thread;
     uint64_t now = time_us();
+    int status = parser->status_code;
 
     thread->complete++;
     thread->requests++;
 
     stats_record(thread->latency, now - c->start);
 
-    if (parser->status_code > 399) {
+    if (status > 399) {
         thread->errors.status++;
+    }
+
+    if (c->headers.buffer) {
+        *c->headers.cursor++ = '\0';
+        script_response(thread->L, status, &c->headers, &c->body);
+        c->state = FIELD;
     }
 
     if (now >= thread->stop_at) {
@@ -420,7 +461,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
-    if (!c->written && thread->L) {
+    if (!c->written && cfg.dynamic) {
         script_request(thread->L, &c->request, &c->length);
     }
 

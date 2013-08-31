@@ -44,12 +44,17 @@ typedef struct {
 typedef struct connection {
     thread *thread;
     http_parser parser;
+    enum {
+        FIELD, VALUE
+    } state;
     int fd;
     SSL *ssl;
     uint64_t start;
     char *request;
     size_t length;
     size_t written;
+    buffer headers;
+    buffer body;
     char buf[RECVBUF];
 } connection;
 

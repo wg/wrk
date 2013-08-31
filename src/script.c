@@ -1,5 +1,6 @@
 // Copyright (C) 2013 - Will Glozer.  All rights reserved.
 
+#include <stdlib.h>
 #include <string.h>
 #include "script.h"
 
@@ -75,9 +76,26 @@ void script_init(lua_State *L, char *script, int argc, char **argv) {
 void script_request(lua_State *L, char **buf, size_t *len) {
     lua_getglobal(L, "request");
     lua_call(L, 0, 1);
-    *buf = (char *) lua_tostring(L, 1);
-    *len = (size_t) lua_strlen(L, 1);
+    *buf = (char *) lua_tolstring(L, 1, len);
     lua_pop(L, 1);
+}
+
+void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
+    lua_getglobal(L, "response");
+    lua_pushinteger(L, status);
+    lua_newtable(L);
+
+    for (char *c = headers->buffer; c < headers->cursor; ) {
+        c = buffer_pushlstring(L, c);
+        c = buffer_pushlstring(L, c);
+        lua_rawset(L, -3);
+    }
+
+    lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
+    lua_call(L, 3, 0);
+
+    buffer_reset(headers);
+    buffer_reset(body);
 }
 
 bool script_is_static(lua_State *L) {
@@ -89,11 +107,22 @@ bool script_is_static(lua_State *L) {
     return is_static;
 }
 
+bool script_want_response(lua_State *L) {
+    lua_getglobal(L, "response");
+    bool defined = lua_type(L, 1) == LUA_TFUNCTION;
+    lua_pop(L, 1);
+    return defined;
+}
+
 bool script_has_done(lua_State *L) {
     lua_getglobal(L, "done");
-    bool has_done = lua_type(L, 1) == LUA_TFUNCTION;
+    bool defined = lua_type(L, 1) == LUA_TFUNCTION;
     lua_pop(L, 1);
-    return has_done;
+    return defined;
+}
+
+void script_header_done(lua_State *L, luaL_Buffer *buffer) {
+    luaL_pushresult(buffer);
 }
 
 void script_summary(lua_State *L, uint64_t duration, uint64_t requests, uint64_t bytes) {
@@ -145,7 +174,7 @@ void script_done(lua_State *L, stats *latency, stats *requests) {
     lua_setmetatable(L, 5);
 
     lua_call(L, 3, 0);
-    lua_pop(L, 5);
+    lua_pop(L, 1);
 }
 
 static stats *checkstats(lua_State *L) {
@@ -201,4 +230,25 @@ static void set_fields(lua_State *L, int index, const table_field *fields) {
         }
         lua_setfield(L, index, f.name);
     }
+}
+
+void buffer_append(buffer *b, const char *data, size_t len) {
+    size_t used = b->cursor - b->buffer;
+    while (used + len + 1 >= b->length) {
+        b->length += 1024;
+        b->buffer  = realloc(b->buffer, b->length);
+        b->cursor  = b->buffer + used;
+    }
+    memcpy(b->cursor, data, len);
+    b->cursor += len;
+}
+
+void buffer_reset(buffer *b) {
+    b->cursor = b->buffer;
+}
+
+char *buffer_pushlstring(lua_State *L, char *start) {
+    char *end = strchr(start, 0);
+    lua_pushlstring(L, start, end - start);
+    return end + 1;
 }

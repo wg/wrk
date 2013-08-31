@@ -7,7 +7,7 @@ wrk - a HTTP benchmarking tool
   This "scripted" branch of wrk includes LuaJIT and a Lua script may be
   used to perform minor alterations to the default HTTP request or even
   even generate a completely new HTTP request each time. The script may
-  also perform custom reporting at the end of a run.
+  also inspect each response and perform custom reporting.
 
 Basic Usage
 
@@ -31,9 +31,10 @@ Scripting
 
   wrk's public Lua API is:
 
-    init    = function(args)
-    request = function()
-    done    = function(summary, latency, requests)
+    init     = function(args)
+    request  = function()
+    response = function(status, headers, body)
+    done     = function(summary, latency, requests)
 
     wrk = {
       scheme  = "http",
@@ -50,9 +51,10 @@ Scripting
       wrk.format returns a HTTP request string containing the passed
       parameters merged with values from the wrk table.
 
-    global init    -- function to be called when the thread is initialized
-    global request -- function returning the HTTP message for each request
-    global done    -- optional function to be called with results of run
+    global init     -- function called when the thread is initialized
+    global request  -- function returning the HTTP message for each request
+    global response -- optional function called with HTTP response data
+    global done     -- optional function called with results of run
 
   The init() function receives any extra command line arguments for the
   script. Script arguments must be separated from wrk arguments with "--"
@@ -68,6 +70,7 @@ Scripting
     latency.mean             -- average value seen
     latency.stdev            -- standard deviation
     latency:percentile(99.0) -- 99th percentile value
+    latency[i]               -- raw sample value
 
     summary = {
       duration = N,  -- run duration in microseconds
@@ -93,7 +96,8 @@ Benchmarking Tips
   a body, will have no performance impact. If multiple HTTP requests are
   necessary they should be pre-generated and returned via a quick lookup in
   the request() call. Per-request actions, particularly building a new HTTP
-  request, will necessarily reduce the amount of load that can be generated.
+  request, and use of response() will necessarily reduce the amount of load
+  that can be generated.
 
 Acknowledgements
 

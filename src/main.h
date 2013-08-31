@@ -40,7 +40,11 @@ static int check_timeouts(aeEventLoop *, long long, void *);
 static void socket_connected(aeEventLoop *, int, void *, int);
 static void socket_writeable(aeEventLoop *, int, void *, int);
 static void socket_readable(aeEventLoop *, int, void *, int);
-static int request_complete(http_parser *);
+
+static int response_complete(http_parser *);
+static int header_field(http_parser *, const char *, size_t);
+static int header_value(http_parser *, const char *, size_t);
+static int response_body(http_parser *, const char *, size_t);
 
 static uint64_t time_us();
 
