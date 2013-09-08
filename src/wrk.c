@@ -142,6 +142,7 @@ int main(int argc, char **argv) {
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 
         if (i == 0) {
+            script_verify_request(t->L);
             cfg.dynamic = !script_is_static(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;

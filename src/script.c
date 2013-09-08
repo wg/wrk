@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "script.h"
+#include "http_parser.h"
 
 typedef struct {
     char *name;
@@ -175,6 +176,47 @@ void script_done(lua_State *L, stats *latency, stats *requests) {
 
     lua_call(L, 3, 0);
     lua_pop(L, 1);
+}
+
+static int verify_request(http_parser *parser) {
+    size_t *count = parser->data;
+    (*count)++;
+    return 0;
+}
+
+size_t script_verify_request(lua_State *L) {
+    http_parser_settings settings = {
+        .on_message_complete = verify_request
+    };
+    http_parser parser;
+    char *request;
+    size_t len, count = 0;
+
+    script_request(L, &request, &len);
+    http_parser_init(&parser, HTTP_REQUEST);
+    parser.data = &count;
+
+    size_t parsed = http_parser_execute(&parser, &settings, request, len);
+
+    if (parsed != len || count == 0) {
+        enum http_errno err = HTTP_PARSER_ERRNO(&parser);
+        const char *desc = http_errno_description(err);
+        const char *msg = err != HPE_OK ? desc : "incomplete request";
+        int line = 1, column = 1;
+
+        for (char *c = request; c < request + parsed; c++) {
+            column++;
+            if (*c == '\n') {
+                column = 1;
+                line++;
+            }
+        }
+
+        fprintf(stderr, "%s at %d:%d\n", msg, line, column);
+        exit(1);
+    }
+
+    return count;
 }
 
 static stats *checkstats(lua_State *L) {
