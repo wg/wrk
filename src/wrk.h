@@ -14,7 +14,7 @@
 #include "script.h"
 #include "http_parser.h"
 
-#define VERSION  "2.2.2"
+#define VERSION  "3.0.0"
 #define RECVBUF  8192
 #define SAMPLES  100000000
 

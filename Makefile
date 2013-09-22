@@ -32,6 +32,7 @@ all: $(BIN)
 
 clean:
 	$(RM) $(BIN) obj/*
+	@$(MAKE) -C deps/luajit clean
 
 $(BIN): $(OBJ) $(ODIR)/bytecode.o
 	@echo LINK $(BIN)

@@ -581,8 +581,6 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
                 break;
-            case 'r':
-                fprintf(stderr, "wrk 2.0.0+ uses -d instead of -r\n");
             case 'h':
             case '?':
             case ':':

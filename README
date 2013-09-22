@@ -4,10 +4,8 @@ wrk - a HTTP benchmarking tool
   load when run on a single multi-core CPU. It combines a multithreaded
   design with scalable event notification systems such as epoll and kqueue.
 
-  This "scripted" branch of wrk includes LuaJIT and a Lua script may be
-  used to perform minor alterations to the default HTTP request or even
-  even generate a completely new HTTP request each time. The script may
-  also inspect each response and perform custom reporting.
+  An optional LuaJIT script can perform HTTP request generation, response
+  processing, and custom reporting.
 
 Basic Usage
 
