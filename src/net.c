@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include "net.h"
 
@@ -29,4 +30,10 @@ status sock_write(connection *c, char *buf, size_t len, size_t *n) {
     }
     *n = (size_t) r;
     return OK;
+}
+
+size_t sock_readable(connection *c) {
+    int n, rc;
+    rc = ioctl(c->fd, FIONREAD, &n);
+    return rc == -1 ? 0 : n;
 }

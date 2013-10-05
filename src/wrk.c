@@ -22,10 +22,11 @@ static struct {
 } statistics;
 
 static struct sock sock = {
-    .connect = sock_connect,
-    .close   = sock_close,
-    .read    = sock_read,
-    .write   = sock_write
+    .connect  = sock_connect,
+    .close    = sock_close,
+    .read     = sock_read,
+    .write    = sock_write,
+    .readable = sock_readable
 };
 
 static struct http_parser_settings parser_settings = {
@@ -114,10 +115,11 @@ int main(int argc, char **argv) {
             ERR_print_errors_fp(stderr);
             exit(1);
         }
-        sock.connect = ssl_connect;
-        sock.close   = ssl_close;
-        sock.read    = ssl_read;
-        sock.write   = ssl_write;
+        sock.connect  = ssl_connect;
+        sock.close    = ssl_close;
+        sock.read     = ssl_read;
+        sock.write    = ssl_write;
+        sock.readable = ssl_readable;
     }
 
     signal(SIGPIPE, SIG_IGN);
@@ -496,14 +498,16 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     size_t n;
 
-    switch (sock.read(c, &n)) {
-        case OK:    break;
-        case ERROR: goto error;
-        case RETRY: return;
-    }
+    do {
+        switch (sock.read(c, &n)) {
+            case OK:    break;
+            case ERROR: goto error;
+            case RETRY: return;
+        }
 
-    if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
-    c->thread->bytes += n;
+        if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
+        c->thread->bytes += n;
+    } while (n == RECVBUF && sock.readable(c) > 0);
 
     return;
 

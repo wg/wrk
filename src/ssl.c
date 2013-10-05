@@ -93,3 +93,7 @@ status ssl_write(connection *c, char *buf, size_t len, size_t *n) {
     *n = (size_t) r;
     return OK;
 }
+
+size_t ssl_readable(connection *c) {
+    return SSL_pending(c->ssl);
+}
