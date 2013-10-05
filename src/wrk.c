@@ -134,6 +134,7 @@ int main(int argc, char **argv) {
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
+        t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = connections;
         t->stop_at     = stop_at;
 
@@ -151,9 +152,9 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (pthread_create(&t->thread, NULL, &thread_main, t)) {
+        if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
-            fprintf(stderr, "unable to create thread %"PRIu64" %s\n", i, msg);
+            fprintf(stderr, "unable to create thread %"PRIu64": %s\n", i, msg);
             exit(2);
         }
     }
@@ -225,10 +226,9 @@ int main(int argc, char **argv) {
 
 void *thread_main(void *arg) {
     thread *thread = arg;
+    aeEventLoop *loop = thread->loop;
 
-    aeEventLoop *loop = aeCreateEventLoop(10 + cfg.connections * 3);
-    thread->cs   = zmalloc(thread->connections * sizeof(connection));
-    thread->loop = loop;
+    thread->cs = zmalloc(thread->connections * sizeof(connection));
     tinymt64_init(&thread->rand, time_us());
     thread->latency = stats_alloc(100000);
 
