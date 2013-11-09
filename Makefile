@@ -45,7 +45,7 @@ $(ODIR): $(LDIR)/libluajit.a
 
 $(ODIR)/bytecode.o: scripts/wrk.lua
 	@echo LUAJIT $<
-	@$(SHELL) -c 'cd $(LDIR) && ./luajit -b $(PWD)/$< $(PWD)/$@'
+	@$(SHELL) -c 'cd $(LDIR) && ./luajit -b $(CURDIR)/$< $(CURDIR)/$@'
 
 $(ODIR)/%.o : %.c
 	@echo CC $<
