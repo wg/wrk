@@ -10,6 +10,7 @@ local wrk = {
 
 function wrk.format(method, path, headers, body)
    local host    = wrk.host
+   local port    = wrk.port
    local method  = method  or wrk.method
    local path    = path    or wrk.path
    local headers = headers or wrk.headers
