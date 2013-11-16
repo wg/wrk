@@ -21,7 +21,7 @@ SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 BIN  := wrk
 
 ODIR := obj
-OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC))
+OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
 
 LDIR     = deps/luajit/src
 LIBS    := -lluajit $(LIBS)
@@ -34,13 +34,13 @@ clean:
 	$(RM) $(BIN) obj/*
 	@$(MAKE) -C deps/luajit clean
 
-$(BIN): $(OBJ) $(ODIR)/bytecode.o
+$(BIN): $(OBJ)
 	@echo LINK $(BIN)
 	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(OBJ): config.h Makefile | $(ODIR)
+$(OBJ): config.h Makefile $(LDIR)/libluajit.a | $(ODIR)
 
-$(ODIR): $(LDIR)/libluajit.a
+$(ODIR):
 	@mkdir -p $@
 
 $(ODIR)/bytecode.o: scripts/wrk.lua
@@ -52,7 +52,7 @@ $(ODIR)/%.o : %.c
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
 $(LDIR)/libluajit.a:
-	@echo Building LuaJit...
+	@echo Building LuaJIT...
 	@$(MAKE) -C $(LDIR) BUILDMODE=static
 
 .PHONY: all clean
