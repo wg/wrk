@@ -8,6 +8,7 @@ static struct config {
     uint64_t threads;
     uint64_t connections;
     uint64_t duration;
+    uint64_t pipeline;
     uint64_t timeout;
     bool     latency;
     bool     dynamic;
@@ -51,6 +52,7 @@ static void usage() {
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
+           "        --pipeline    <N>  Send N pipelined requests  \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
@@ -170,7 +172,7 @@ int main(int argc, char **argv) {
 
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    printf("  %"PRIu64" threads and %"PRIu64" connections with pipeline length %"PRIu64"\n", cfg.threads, cfg.connections, cfg.pipeline);
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -238,7 +240,7 @@ void *thread_main(void *arg) {
     size_t length = 0;
 
     if (!cfg.dynamic) {
-        script_request(thread->L, &request, &length);
+        script_request(thread->L, &request, &length, cfg.pipeline);
     }
 
     connection *c = thread->cs;
@@ -259,6 +261,9 @@ void *thread_main(void *arg) {
 
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
+    if (!cfg.dynamic) {
+        zfree(request);
+    }
 
     uint64_t max = thread->latency->max;
     stats_free(thread->latency);
@@ -386,8 +391,6 @@ static int response_complete(http_parser *parser) {
     thread->complete++;
     thread->requests++;
 
-    stats_record(thread->latency, now - c->start);
-
     if (status > 399) {
         thread->errors.status++;
     }
@@ -403,10 +406,13 @@ static int response_complete(http_parser *parser) {
         goto done;
     }
 
+    if (--c->pending == 0) stats_record(thread->latency, now - c->start);
     if (!http_should_keep_alive(parser)) goto reconnect;
 
     http_parser_init(parser, HTTP_RESPONSE);
-    aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    if (c->pending == 0) {
+        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    }
 
     goto done;
 
@@ -465,7 +471,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     thread *thread = c->thread;
 
     if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length);
+        script_request(thread->L, &c->request, &c->length, cfg.pipeline);
     }
 
     char  *buf = c->request + c->written;
@@ -478,11 +484,17 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         case RETRY: return;
     }
 
-    if (!c->written) c->start = time_us();
+    if (!c->written) {
+        c->start = time_us();
+        c->pending = cfg.pipeline;
+    }
 
     c->written += n;
     if (c->written == c->length) {
         c->written = 0;
+        if (cfg.dynamic) {
+            zfree(c->request);
+        }
         aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     }
 
@@ -543,6 +555,7 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "pipeline",    required_argument, NULL, 'P' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -555,9 +568,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->threads     = 2;
     cfg->connections = 10;
     cfg->duration    = 10;
+    cfg->pipeline    = 1;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:P:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -580,6 +594,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
+                break;
+            case 'P':
+                if (scan_metric(optarg, &cfg->pipeline)) return -1;
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());

@@ -4,6 +4,7 @@
 #include <string.h>
 #include "script.h"
 #include "http_parser.h"
+#include "zmalloc.h"
 
 typedef struct {
     char *name;
@@ -74,11 +75,47 @@ void script_init(lua_State *L, char *script, int argc, char **argv) {
     lua_call(L, 1, 0);
 }
 
-void script_request(lua_State *L, char **buf, size_t *len) {
+static void script_request_single(lua_State *L, char **buf, size_t *len) {
     lua_getglobal(L, "request");
     lua_call(L, 0, 1);
     *buf = (char *) lua_tolstring(L, 1, len);
     lua_pop(L, 1);
+}
+
+void script_request(lua_State *L, char **buf, size_t *len, size_t num_requests) {
+    size_t i;
+    size_t merged_length;
+    size_t single_length;
+    char* merged_buf;
+    size_t merged_buf_cap;
+    char* single_buf;
+
+    script_request_single(L, &single_buf, &single_length);
+
+    merged_buf_cap = single_length * num_requests * 2 + 1;
+    merged_buf = zmalloc(merged_buf_cap);
+    merged_length = single_length;
+    memcpy(merged_buf, single_buf, single_length);
+
+    for (i = 1; i < num_requests; i ++) {
+        script_request_single(L, &single_buf, &single_length);
+
+        if (merged_length + single_length > merged_buf_cap) {
+            merged_buf_cap <<= 1;
+            merged_buf = zrealloc(merged_buf, merged_buf_cap);
+        }
+
+        memcpy(merged_buf + merged_length, single_buf, single_length);
+        merged_length += single_length;
+    }
+
+    if (merged_length == merged_buf_cap) {
+        merged_buf = zrealloc(merged_buf, merged_buf_cap + 1);
+    }
+    merged_buf[merged_length] = '\0';
+
+    *buf = merged_buf;
+    *len = merged_length;
 }
 
 void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
@@ -192,7 +229,7 @@ size_t script_verify_request(lua_State *L) {
     char *request;
     size_t len, count = 0;
 
-    script_request(L, &request, &len);
+    script_request_single(L, &request, &len);
     http_parser_init(&parser, HTTP_REQUEST);
     parser.data = &count;
 
