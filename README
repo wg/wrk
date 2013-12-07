@@ -84,6 +84,25 @@ Scripting
       }
     }
 
+Scripting Examples
+
+  Increase the 'Counter' header for each request:
+
+    i = 0
+    request = function()
+      wrk.headers["Counter"] = i
+      i = i + 1
+      return wrk.format()
+    end
+
+  Send a POST request:
+
+    -- no need to override 'request' like the 'Counter' example'
+    -- because we always generate the same request in this case
+    wrk.method = "POST"
+    wrk.body = "foo=bar&baz=quux"
+    wrk.headers["Content-Type"] = "application/x-www-form-urlencoded"
+
 Benchmarking Tips
 
   The machine running wrk must have a sufficient number of ephemeral ports
