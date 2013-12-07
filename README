@@ -5,7 +5,8 @@ wrk - a HTTP benchmarking tool
   design with scalable event notification systems such as epoll and kqueue.
 
   An optional LuaJIT script can perform HTTP request generation, response
-  processing, and custom reporting.
+  processing, and custom reporting. Several example scripts are located in
+  scripts/
 
 Basic Usage
 
