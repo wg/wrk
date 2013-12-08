@@ -9,6 +9,7 @@ static struct config {
     uint64_t connections;
     uint64_t duration;
     uint64_t timeout;
+    uint64_t pipeline;
     bool     latency;
     bool     dynamic;
     char    *script;
@@ -145,7 +146,7 @@ int main(int argc, char **argv) {
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 
         if (i == 0) {
-            script_verify_request(t->L);
+            cfg.pipeline = script_verify_request(t->L);
             cfg.dynamic = !script_is_static(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;
@@ -386,8 +387,6 @@ static int response_complete(http_parser *parser) {
     thread->complete++;
     thread->requests++;
 
-    stats_record(thread->latency, now - c->start);
-
     if (status > 399) {
         thread->errors.status++;
     }
@@ -403,15 +402,17 @@ static int response_complete(http_parser *parser) {
         goto done;
     }
 
-    if (!http_should_keep_alive(parser)) goto reconnect;
+    if (--c->pending == 0) {
+        stats_record(thread->latency, now - c->start);
+        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    }
+
+    if (!http_should_keep_alive(parser)) {
+        reconnect_socket(thread, c);
+        goto done;
+    }
 
     http_parser_init(parser, HTTP_RESPONSE);
-    aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
-
-    goto done;
-
-  reconnect:
-    reconnect_socket(thread, c);
 
   done:
     return 0;
@@ -478,7 +479,10 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         case RETRY: return;
     }
 
-    if (!c->written) c->start = time_us();
+    if (!c->written) {
+        c->start = time_us();
+        c->pending = cfg.pipeline;
+    }
 
     c->written += n;
     if (c->written == c->length) {
