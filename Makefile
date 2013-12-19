@@ -27,12 +27,19 @@ LDIR     = deps/luajit/src
 LIBS    := -lluajit $(LIBS)
 CFLAGS  += -I $(LDIR)
 LDFLAGS += -L $(LDIR)
+PREFIX  ?= /usr/local
 
 all: $(BIN)
 
 clean:
 	$(RM) $(BIN) obj/*
 	@$(MAKE) -C deps/luajit clean
+
+install: $(BIN)
+	cp -f $(BIN) $(PREFIX)/bin/$(BIN)
+
+uninstall:
+	rm -f $(PREFIX)/bin/$(BIN)
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
@@ -55,7 +62,7 @@ $(LDIR)/libluajit.a:
 	@echo Building LuaJIT...
 	@$(MAKE) -C $(LDIR) BUILDMODE=static
 
-.PHONY: all clean
+.PHONY: all clean install uninstall
 .SUFFIXES:
 .SUFFIXES: .c .o .lua
 
