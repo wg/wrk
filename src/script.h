@@ -14,6 +14,7 @@ typedef struct {
 } buffer;
 
 lua_State *script_create(char *, char *, char *, char *);
+void script_source_path(lua_State *, char *);
 void script_headers(lua_State *, char **);
 size_t script_verify_request(lua_State *L);
 

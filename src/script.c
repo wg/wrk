@@ -59,6 +59,12 @@ void script_headers(lua_State *L, char **headers) {
     lua_pop(L, 2);
 }
 
+void script_source_path(lua_State *L, char *script) {
+    if (!script){ return; }
+    lua_pushstring(L, script);
+    lua_setglobal(L, "WRK_SCRIPT_PATH");
+}
+
 void script_init(lua_State *L, char *script, int argc, char **argv) {
     if (script && luaL_dofile(L, script)) {
         const char *cause = lua_tostring(L, -1);
