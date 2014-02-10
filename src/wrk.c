@@ -331,6 +331,26 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
     return AE_NOMORE;
 }
 
+static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
+    thread *thread = data;
+    connection *c  = thread->cs;
+    uint64_t now   = time_us();
+
+    uint64_t maxAge = now - (cfg.timeout * 1000);
+
+    for (uint64_t i = 0; i < thread->connections; i++, c++) {
+        if (maxAge > c->start) {
+            thread->errors.timeout++;
+        }
+    }
+
+    if (stop || now >= thread->stop_at) {
+        aeStop(loop);
+    }
+
+    return TIMEOUT_INTERVAL_MS;
+}
+
 static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
@@ -418,26 +438,6 @@ static int response_complete(http_parser *parser) {
     return 0;
 }
 
-static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-    connection *c  = thread->cs;
-    uint64_t now   = time_us();
-
-    uint64_t maxAge = now - (cfg.timeout * 1000);
-
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
-        if (maxAge > c->start) {
-            thread->errors.timeout++;
-        }
-    }
-
-    if (stop || now >= thread->stop_at) {
-        aeStop(loop);
-    }
-
-    return TIMEOUT_INTERVAL_MS;
-}
-
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
 
@@ -450,8 +450,8 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->written = 0;
 
-    aeCreateFileEvent(c->thread->loop, c->fd, AE_READABLE, socket_readable, c);
-    aeCreateFileEvent(c->thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    aeCreateFileEvent(c->thread->loop, fd, AE_READABLE, socket_readable, c);
+    aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, c);
 
     return;
 
