@@ -38,7 +38,7 @@ SSL_CTX *ssl_init() {
         CRYPTO_set_locking_callback(ssl_lock);
         CRYPTO_set_id_callback(ssl_id);
 
-        if ((ctx = SSL_CTX_new(TLSv1_client_method()))) {
+        if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
             SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
             SSL_CTX_set_verify_depth(ctx, 0);
             SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
