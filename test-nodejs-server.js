@@ -1,8 +1,10 @@
 //this is for thread_number.lua
 var http = require('http');
+var requests = 0;
 
 http.createServer(function(req, res){
-	console.log(req.headers['x-thread']);
+	requests++;
+	console.log('x-thread: %s total requests: %s', req.headers['x-thread'], requests);
 	res.end(req.headers['x-thread']);
 }).listen(1234);
 

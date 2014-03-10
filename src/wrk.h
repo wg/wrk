@@ -34,6 +34,9 @@ typedef struct {
     uint64_t start;
     uint64_t rate;
     uint64_t missed;
+    uint64_t total_requests;
+    uint64_t total_responses;
+    uint64_t max_requests;
     stats *latency;
     tinymt64_t rand;
     lua_State *L;
