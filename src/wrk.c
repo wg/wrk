@@ -144,7 +144,10 @@ int main(int argc, char **argv) {
         t->stop_at     = stop_at;
         t->max_requests = cfg.max_requests;
 
-        t->L = script_create(schema, host, port, path, i);
+        uint64_t* thread_num = zmalloc(sizeof(uint64_t));
+        *thread_num = i;
+
+        t->L = script_create(schema, host, port, path, thread_num);
         script_headers(t->L, headers);
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 

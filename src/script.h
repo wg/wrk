@@ -13,7 +13,7 @@ typedef struct {
     char  *cursor;
 } buffer;
 
-lua_State *script_create(char *, char *, char *, char *, uint64_t);
+lua_State *script_create(char *, char *, char *, char *, uint64_t*);
 void script_headers(lua_State *, char **);
 size_t script_verify_request(lua_State *L);
 
