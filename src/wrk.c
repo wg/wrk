@@ -141,7 +141,7 @@ int main(int argc, char **argv) {
         t->connections = connections;
         t->stop_at     = stop_at;
 
-        t->L = script_create(schema, host, port, path);
+        t->L = script_create(schema, host, port, path, i);
         script_headers(t->L, headers);
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 

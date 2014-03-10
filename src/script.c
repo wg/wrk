@@ -21,7 +21,7 @@ static const struct luaL_reg statslib[] = {
     { NULL,      NULL             }
 };
 
-lua_State *script_create(char *scheme, char *host, char *port, char *path) {
+lua_State *script_create(char *scheme, char *host, char *port, char *path, uint64_t thread_nubmer) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     luaL_dostring(L, "wrk = require \"wrk\"");
@@ -30,11 +30,15 @@ lua_State *script_create(char *scheme, char *host, char *port, char *path) {
     luaL_register(L, NULL, statslib);
     lua_pop(L, 1);
 
+    uint64_t* thr = (uint64_t*)malloc(sizeof(uint64_t));
+    *thr = thread_nubmer;
+    
     const table_field fields[] = {
         { "scheme", LUA_TSTRING, scheme },
         { "host",   LUA_TSTRING, host   },
         { "port",   LUA_TSTRING, port   },
         { "path",   LUA_TSTRING, path   },
+        { "thread", LUA_TNUMBER, thr },
         { NULL,     0,           NULL   },
     };
 
