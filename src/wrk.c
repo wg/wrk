@@ -441,6 +441,13 @@ static int response_complete(http_parser *parser) {
     http_parser_init(parser, HTTP_RESPONSE);
 
   done:
+  
+    thread->total_responses++;
+
+    if(cfg.max_requests > 0 && thread->total_responses >= cfg.max_requests) {
+      aeStop(thread->loop);
+    }
+    
     return 0;
 }
 
@@ -471,9 +478,12 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
     
-    if(cfg.max_requests > 0 && thread->total_requests >= cfg.max_requests) {
-        return;
-    }
+    // if(cfg.max_requests > 0 && thread->total_requests >= cfg.max_requests) {
+    //     // aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
+    //     // sock.close(c);
+    //     // close(c->fd);
+    //     return;
+    // }
     
 
     if (!c->written && cfg.dynamic) {
@@ -500,15 +510,14 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         c->written = 0;
         aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     }
-
-    thread->total_requests++;
+    
     return;
 
   error:
     thread->errors.write++;
     reconnect_socket(thread, c);
     
-    thread->total_requests++;
+    
 }
 
 
@@ -526,23 +535,12 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
         c->thread->bytes += n;
     } while (n == RECVBUF && sock.readable(c) > 0);
-    c->thread->total_responses++;
     
-    if(cfg.max_requests > 0 && c->thread->total_responses >= cfg.max_requests) {
-        aeStop(loop);
-        return;
-    }
     return;
 
   error:
     c->thread->errors.read++;
     reconnect_socket(c->thread, c);
-    c->thread->total_responses++;
-    
-    if(cfg.max_requests > 0 && c->thread->total_responses >= cfg.max_requests) {
-        aeStop(loop);
-        return;
-    }
 }
 
 static uint64_t time_us() {
