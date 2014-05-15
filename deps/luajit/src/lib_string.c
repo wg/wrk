@@ -1,6 +1,6 @@
 /*
 ** String library.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -64,7 +64,7 @@ LJLIB_ASM(string_byte)		LJLIB_REC(string_range 0)
 LJLIB_ASM(string_char)
 {
   int i, nargs = (int)(L->top - L->base);
-  char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, (size_t)nargs);
+  char *buf = lj_str_needbuf(L, &G(L)->tmpbuf, (MSize)nargs);
   for (i = 1; i <= nargs; i++) {
     int32_t k = lj_lib_checkint(L, i);
     if (!checku8(k))

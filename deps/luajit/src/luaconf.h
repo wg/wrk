@@ -1,11 +1,14 @@
 /*
 ** Configuration header.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef luaconf_h
 #define luaconf_h
 
+#ifndef WINVER
+#define WINVER 0x0501
+#endif
 #include <limits.h>
 #include <stddef.h>
 
@@ -23,26 +26,40 @@
   ".\\?.dll;" LUA_CDIR"?.dll;" LUA_CDIR"loadall.dll"
 #else
 /*
-** Note to distribution maintainers: do NOT patch the following line!
+** Note to distribution maintainers: do NOT patch the following lines!
 ** Please read ../doc/install.html#distro and pass PREFIX=/usr instead.
 */
-#define LUA_ROOT	"/usr/local/"
-#define LUA_LDIR	LUA_ROOT "share/lua/5.1/"
-#define LUA_CDIR	LUA_ROOT "lib/lua/5.1/"
-#ifdef LUA_XROOT
-#define LUA_JDIR	LUA_XROOT "share/luajit-2.0.2/"
-#define LUA_XPATH \
-  ";" LUA_XROOT "share/lua/5.1/?.lua;" LUA_XROOT "share/lua/5.1/?/init.lua"
-#define LUA_XCPATH	LUA_XROOT "lib/lua/5.1/?.so;"
-#else
-#define LUA_JDIR	LUA_ROOT "share/luajit-2.0.2/"
-#define LUA_XPATH
-#define LUA_XCPATH
+#ifndef LUA_MULTILIB
+#define LUA_MULTILIB	"lib"
 #endif
-#define LUA_PATH_DEFAULT \
-  "./?.lua;" LUA_JDIR"?.lua;" LUA_LDIR"?.lua;" LUA_LDIR"?/init.lua" LUA_XPATH
-#define LUA_CPATH_DEFAULT \
-  "./?.so;" LUA_CDIR"?.so;" LUA_XCPATH LUA_CDIR"loadall.so"
+#ifndef LUA_LMULTILIB
+#define LUA_LMULTILIB	"lib"
+#endif
+#define LUA_LROOT	"/usr/local"
+#define LUA_LUADIR	"/lua/5.1/"
+#define LUA_LJDIR	"/luajit-2.0.3/"
+
+#ifdef LUA_ROOT
+#define LUA_JROOT	LUA_ROOT
+#define LUA_RLDIR	LUA_ROOT "/share" LUA_LUADIR
+#define LUA_RCDIR	LUA_ROOT "/" LUA_MULTILIB LUA_LUADIR
+#define LUA_RLPATH	";" LUA_RLDIR "?.lua;" LUA_RLDIR "?/init.lua"
+#define LUA_RCPATH	";" LUA_RCDIR "?.so"
+#else
+#define LUA_JROOT	LUA_LROOT
+#define LUA_RLPATH
+#define LUA_RCPATH
+#endif
+
+#define LUA_JPATH	";" LUA_JROOT "/share" LUA_LJDIR "?.lua"
+#define LUA_LLDIR	LUA_LROOT "/share" LUA_LUADIR
+#define LUA_LCDIR	LUA_LROOT "/" LUA_LMULTILIB LUA_LUADIR
+#define LUA_LLPATH	";" LUA_LLDIR "?.lua;" LUA_LLDIR "?/init.lua"
+#define LUA_LCPATH1	";" LUA_LCDIR "?.so"
+#define LUA_LCPATH2	";" LUA_LCDIR "loadall.so"
+
+#define LUA_PATH_DEFAULT	"./?.lua" LUA_JPATH LUA_LLPATH LUA_RLPATH
+#define LUA_CPATH_DEFAULT	"./?.so" LUA_LCPATH1 LUA_RCPATH LUA_LCPATH2
 #endif
 
 /* Environment variable names for path overrides and initialization code. */

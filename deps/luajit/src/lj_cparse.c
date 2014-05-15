@@ -1,6 +1,6 @@
 /*
 ** C declaration parser.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -57,12 +57,20 @@ static LJ_AINLINE int cp_iseol(CPChar c)
   return (c == '\n' || c == '\r');
 }
 
-static LJ_AINLINE CPChar cp_get(CPState *cp);
-
 /* Peek next raw character. */
 static LJ_AINLINE CPChar cp_rawpeek(CPState *cp)
 {
   return (CPChar)(uint8_t)(*cp->p);
+}
+
+static LJ_NOINLINE CPChar cp_get_bs(CPState *cp);
+
+/* Get next character. */
+static LJ_AINLINE CPChar cp_get(CPState *cp)
+{
+  cp->c = (CPChar)(uint8_t)(*cp->p++);
+  if (LJ_LIKELY(cp->c != '\\')) return cp->c;
+  return cp_get_bs(cp);
 }
 
 /* Transparently skip backslash-escaped line breaks. */
@@ -75,14 +83,6 @@ static LJ_NOINLINE CPChar cp_get_bs(CPState *cp)
   if (cp_iseol(c2) && c2 != c) cp->p++;
   cp->linenumber++;
   return cp_get(cp);
-}
-
-/* Get next character. */
-static LJ_AINLINE CPChar cp_get(CPState *cp)
-{
-  cp->c = (CPChar)(uint8_t)(*cp->p++);
-  if (LJ_LIKELY(cp->c != '\\')) return cp->c;
-  return cp_get_bs(cp);
 }
 
 /* Grow save buffer. */
@@ -1258,7 +1258,7 @@ static void cp_struct_layout(CPState *cp, CTypeID sid, CTInfo sattr)
       sinfo |= (info & (CTF_QUAL|CTF_VLA));  /* Merge pseudo-qualifiers. */
 
       /* Check for size overflow and determine alignment. */
-      if (sz >= 0x20000000u || bofs + csz < bofs) {
+      if (sz >= 0x20000000u || bofs + csz < bofs || (info & CTF_VLA)) {
 	if (!(sz == CTSIZE_INVALID && ctype_isarray(info) &&
 	      !(sinfo & CTF_UNION)))
 	  cp_err(cp, LJ_ERR_FFI_INVSIZE);

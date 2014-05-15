@@ -1,6 +1,6 @@
 /*
 ** LuaJIT VM builder: Assembler source code emitter.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "buildvm.h"
@@ -100,7 +100,7 @@ static void emit_asm_wordreloc(BuildCtx *ctx, uint8_t *p, int n,
     fprintf(ctx->fp, "\tblx %s\n", sym);
   } else if ((ins & 0x0e000000u) == 0x0a000000u) {
     fprintf(ctx->fp, "\t%s%.2s %s\n", (ins & 0x01000000u) ? "bl" : "b",
-	    "eqnecsccmiplvsvchilsgeltgtle" + 2*(ins >> 28), sym);
+	    &"eqnecsccmiplvsvchilsgeltgtle"[2*(ins >> 28)], sym);
   } else {
     fprintf(stderr,
 	    "Error: unsupported opcode %08x for %s symbol relocation.\n",

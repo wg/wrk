@@ -27,6 +27,7 @@ typedef unsigned __int64 U64;
 #else
 typedef unsigned long long U64;
 #endif
+int _CRT_glob = 0;
 #include <stddef.h>
 #include <stdarg.h>
 #include <limits.h>

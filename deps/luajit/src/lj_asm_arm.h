@@ -1,6 +1,6 @@
 /*
 ** ARM IR assembler (SSA IR -> machine code).
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /* -- Register allocator extensions --------------------------------------- */
@@ -493,6 +493,7 @@ static void asm_retf(ASMState *as, IRIns *ir)
   int32_t delta = 1+bc_a(*((const BCIns *)pc - 1));
   as->topslot -= (BCReg)delta;
   if ((int32_t)as->topslot < 0) as->topslot = 0;
+  irt_setmark(IR(REF_BASE)->t);  /* Children must not coalesce with BASE reg. */
   /* Need to force a spill on REF_BASE now to update the stack slot. */
   emit_lso(as, ARMI_STR, base, RID_SP, ra_spill(as, IR(REF_BASE)));
   emit_setgl(as, base, jit_base);
@@ -521,10 +522,10 @@ static void asm_tointg(ASMState *as, IRIns *ir, Reg left)
 static void asm_tobit(ASMState *as, IRIns *ir)
 {
   RegSet allow = RSET_FPR;
-  Reg dest = ra_dest(as, ir, RSET_GPR);
   Reg left = ra_alloc1(as, ir->op1, allow);
   Reg right = ra_alloc1(as, ir->op2, rset_clear(allow, left));
   Reg tmp = ra_scratch(as, rset_clear(allow, right));
+  Reg dest = ra_dest(as, ir, RSET_GPR);
   emit_dn(as, ARMI_VMOV_R_S, dest, (tmp & 15));
   emit_dnm(as, ARMI_VADD_D, (tmp & 15), (left & 15), (right & 15));
 }
@@ -564,9 +565,9 @@ static void asm_conv(ASMState *as, IRIns *ir)
       lua_assert(irt_isint(ir->t) && st == IRT_NUM);
       asm_tointg(as, ir, ra_alloc1(as, lref, RSET_FPR));
     } else {
-      Reg dest = ra_dest(as, ir, RSET_GPR);
       Reg left = ra_alloc1(as, lref, RSET_FPR);
       Reg tmp = ra_scratch(as, rset_exclude(RSET_FPR, left));
+      Reg dest = ra_dest(as, ir, RSET_GPR);
       ARMIns ai;
       emit_dn(as, ARMI_VMOV_R_S, dest, (tmp & 15));
       ai = irt_isint(ir->t) ?
@@ -1210,6 +1211,9 @@ static void asm_sload(ASMState *as, IRIns *ir)
   } else
 #endif
   if (ra_used(ir)) {
+    Reg tmp = RID_NONE;
+    if ((ir->op2 & IRSLOAD_CONVERT))
+      tmp = ra_scratch(as, t == IRT_INT ? RSET_FPR : RSET_GPR);
     lua_assert((LJ_SOFTFP ? 0 : irt_isnum(ir->t)) ||
 	       irt_isint(ir->t) || irt_isaddr(ir->t));
     dest = ra_dest(as, ir, (!LJ_SOFTFP && t == IRT_NUM) ? RSET_FPR : allow);
@@ -1217,18 +1221,15 @@ static void asm_sload(ASMState *as, IRIns *ir)
     base = ra_alloc1(as, REF_BASE, allow);
     if ((ir->op2 & IRSLOAD_CONVERT)) {
       if (t == IRT_INT) {
-	Reg tmp = ra_scratch(as, RSET_FPR);
 	emit_dn(as, ARMI_VMOV_R_S, dest, (tmp & 15));
 	emit_dm(as, ARMI_VCVT_S32_F64, (tmp & 15), (tmp & 15));
-	dest = tmp;
 	t = IRT_NUM;  /* Check for original type. */
       } else {
-	Reg tmp = ra_scratch(as, RSET_GPR);
 	emit_dm(as, ARMI_VCVT_F64_S32, (dest & 15), (dest & 15));
 	emit_dn(as, ARMI_VMOV_S_R, tmp, (dest & 15));
-	dest = tmp;
 	t = IRT_INT;  /* Check for original type. */
       }
+      dest = tmp;
     }
     goto dotypecheck;
   }
@@ -1503,7 +1504,7 @@ static void asm_intmul(ASMState *as, IRIns *ir)
   if (dest == left && left != right) { left = right; right = dest; }
   if (irt_isguard(ir->t)) {  /* IR_MULOV */
     if (!(as->flags & JIT_F_ARMV6) && dest == left)
-      tmp = left = ra_scratch(as, rset_exclude(RSET_FPR, left));
+      tmp = left = ra_scratch(as, rset_exclude(RSET_GPR, left));
     asm_guardcc(as, CC_NE);
     emit_nm(as, ARMI_TEQ|ARMF_SH(ARMSH_ASR, 31), RID_TMP, dest);
     emit_dnm(as, ARMI_SMULL|ARMF_S(right), dest, RID_TMP, left);
@@ -2102,7 +2103,8 @@ static void asm_head_root_base(ASMState *as)
   IRIns *ir;
   asm_head_lreg(as);
   ir = IR(REF_BASE);
-  if (ra_hasreg(ir->r) && rset_test(as->modset, ir->r)) ra_spill(as, ir);
+  if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
+    ra_spill(as, ir);
   ra_destreg(as, ir, RID_BASE);
 }
 
@@ -2112,7 +2114,8 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
   IRIns *ir;
   asm_head_lreg(as);
   ir = IR(REF_BASE);
-  if (ra_hasreg(ir->r) && rset_test(as->modset, ir->r)) ra_spill(as, ir);
+  if (ra_hasreg(ir->r) && (rset_test(as->modset, ir->r) || irt_ismarked(ir->t)))
+    ra_spill(as, ir);
   if (ra_hasspill(irp->s)) {
     rset_clear(allow, ra_dest(as, ir, allow));
   } else {

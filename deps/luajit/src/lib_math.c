@@ -1,6 +1,6 @@
 /*
 ** Math library.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include <math.h>
@@ -47,6 +47,12 @@ LJLIB_ASM_(math_tanh)		LJLIB_REC(math_htrig IRCALL_tanh)
 LJLIB_ASM_(math_frexp)
 LJLIB_ASM_(math_modf)		LJLIB_REC(.)
 
+LJLIB_PUSH(57.29577951308232)
+LJLIB_ASM_(math_deg)		LJLIB_REC(math_degrad)
+
+LJLIB_PUSH(0.017453292519943295)
+LJLIB_ASM_(math_rad)		LJLIB_REC(math_degrad)
+
 LJLIB_ASM(math_log)		LJLIB_REC(math_log)
 {
   double x = lj_lib_checknum(L, 1);
@@ -62,12 +68,6 @@ LJLIB_ASM(math_log)		LJLIB_REC(math_log)
   }
   return FFH_RETRY;
 }
-
-LJLIB_PUSH(57.29577951308232)
-LJLIB_ASM_(math_deg)		LJLIB_REC(math_degrad)
-
-LJLIB_PUSH(0.017453292519943295)
-LJLIB_ASM_(math_rad)		LJLIB_REC(math_degrad)
 
 LJLIB_ASM(math_atan2)		LJLIB_REC(.)
 {

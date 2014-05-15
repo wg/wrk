@@ -1,6 +1,6 @@
 /*
 ** LOOP: Loop Optimizations.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_loop_c
@@ -105,20 +105,24 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
 			  SnapNo onsnap)
 {
   int passx = 0;
-  IRRef i, nslots;
+  IRRef i, j, nslots;
   IRRef invar = J->chain[IR_LOOP];
   /* Pass #1: mark redundant and potentially redundant PHIs. */
-  for (i = 0; i < nphi; i++) {
+  for (i = 0, j = 0; i < nphi; i++) {
     IRRef lref = phi[i];
     IRRef rref = subst[lref];
     if (lref == rref || rref == REF_DROP) {  /* Invariants are redundant. */
-      irt_setmark(IR(lref)->t);
-    } else if (!(IR(rref)->op1 == lref || IR(rref)->op2 == lref)) {
-      /* Quick check for simple recurrences failed, need pass2. */
-      irt_setmark(IR(lref)->t);
-      passx = 1;
+      irt_clearphi(IR(lref)->t);
+    } else {
+      phi[j++] = (IRRef1)lref;
+      if (!(IR(rref)->op1 == lref || IR(rref)->op2 == lref)) {
+	/* Quick check for simple recurrences failed, need pass2. */
+	irt_setmark(IR(lref)->t);
+	passx = 1;
+      }
     }
   }
+  nphi = j;
   /* Pass #2: traverse variant part and clear marks of non-redundant PHIs. */
   if (passx) {
     SnapNo s;
@@ -174,15 +178,10 @@ static void loop_emit_phi(jit_State *J, IRRef1 *subst, IRRef1 *phi, IRRef nphi,
       IRRef lref = phi[i];
       IRIns *ir = IR(lref);
       if (!irt_ismarked(ir->t)) {  /* Propagate only from unmarked PHIs. */
-	IRRef rref = subst[lref];
-	if (lref == rref) {  /* Mark redundant PHI. */
-	  irt_setmark(ir->t);
-	} else {
-	  IRIns *irr = IR(rref);
-	  if (irt_ismarked(irr->t)) {  /* Right ref points to other PHI? */
-	    irt_clearmark(irr->t);  /* Mark that PHI as non-redundant. */
-	    passx = 1;  /* Retry. */
-	  }
+	IRIns *irr = IR(subst[lref]);
+	if (irt_ismarked(irr->t)) {  /* Right ref points to other PHI? */
+	  irt_clearmark(irr->t);  /* Mark that PHI as non-redundant. */
+	  passx = 1;  /* Retry. */
 	}
       }
     }

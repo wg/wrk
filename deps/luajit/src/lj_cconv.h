@@ -1,6 +1,6 @@
 /*
 ** C type conversions.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_CCONV_H
@@ -29,7 +29,7 @@ static LJ_AINLINE uint32_t cconv_idx(CTInfo info)
   uint32_t idx = ((info >> 26) & 15u);  /* Dispatch bits. */
   lua_assert(ctype_type(info) <= CT_MAYCONVERT);
 #if LJ_64
-  idx = ((U64x(f436fff5,fff7f021) >> 4*idx) & 15u);
+  idx = ((uint32_t)(U64x(f436fff5,fff7f021) >> 4*idx) & 15u);
 #else
   idx = (((idx < 8 ? 0xfff7f021u : 0xf436fff5) >> 4*(idx & 7u)) & 15u);
 #endif

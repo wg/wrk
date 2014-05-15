@@ -2,7 +2,7 @@
 -- Lua script to generate a customized, minified version of Lua.
 -- The resulting 'minilua' is used for the build process of LuaJIT.
 ----------------------------------------------------------------------------
--- Copyright (C) 2005-2013 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 
@@ -210,6 +210,7 @@ typedef unsigned __int64 U64;
 #else
 typedef unsigned long long U64;
 #endif
+int _CRT_glob = 0;
 ]]}, {}
 
 local function preprocess(src)

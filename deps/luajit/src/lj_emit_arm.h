@@ -1,6 +1,6 @@
 /*
 ** ARM instruction emitter.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /* -- Constant encoding --------------------------------------------------- */

@@ -1,6 +1,6 @@
 |// Low-level VM code for x86 CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 |
 |.if P64
 |.arch x64
@@ -4652,7 +4652,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |
     |2:  // Upvalue is black. Check if new value is collectable and white.
     |  sub RD, LJ_TISGCV
-    |  cmp RD, LJ_TISNUM - LJ_TISGCV			// tvisgcv(v)
+    |  cmp RD, LJ_TNUMX - LJ_TISGCV			// tvisgcv(v)
     |  jbe <1
     |  test byte GCOBJ:RA->gch.marked, LJ_GC_WHITES	// iswhite(v)
     |  jz <1
@@ -6344,12 +6344,12 @@ static void emit_asm_debug(BuildCtx *ctx)
 #if LJ_64
 	  "\t.byte 0xe\n\t.byte 16\n"		/* def_cfa_offset */
 	  "\t.byte 0x86\n\t.byte 0x2\n"		/* offset rbp */
-	  "\t.byte 0xd\n\t.uleb128 0x6\n"	/* def_cfa_register rbp */
+	  "\t.byte 0xd\n\t.byte 0x6\n"		/* def_cfa_register rbp */
 	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset rbx */
 #else
 	  "\t.byte 0xe\n\t.byte 8\n"		/* def_cfa_offset */
 	  "\t.byte 0x84\n\t.byte 0x2\n"		/* offset ebp (4 for MACH-O)*/
-	  "\t.byte 0xd\n\t.uleb128 0x4\n"	/* def_cfa_register ebp */
+	  "\t.byte 0xd\n\t.byte 0x4\n"		/* def_cfa_register ebp */
 	  "\t.byte 0x83\n\t.byte 0x3\n"		/* offset ebx */
 #endif
 	  "\t.align " BSZPTR "\n"

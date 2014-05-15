@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- DynASM x86/x64 module.
 --
--- Copyright (C) 2005-2013 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 
@@ -1040,7 +1040,7 @@ local map_op = {
   -- ED: *in Rdw,dx
   -- EE: *out dx,Rb
   -- EF: *out dx,Rdw
-  -- F0: *lock
+  lock_0 =	"F0",
   int1_0 =	"F1",
   repne_0 =	"F2",
   repnz_0 =	"F2",
@@ -1678,7 +1678,7 @@ if x64 then
   function map_op.mov64_2(params)
     if not params then return { "reg, imm", "reg, [disp]", "[disp], reg" } end
     if secpos+2 > maxsecpos then wflush() end
-    local opcode, op64, sz, rex
+    local opcode, op64, sz, rex, vreg
     local op64 = match(params[1], "^%[%s*(.-)%s*%]$")
     if op64 then
       local a = parseoperand(params[2])
@@ -1699,11 +1699,17 @@ if x64 then
 	  werror("bad operand mode")
 	end
 	op64 = params[2]
-	opcode = 0xb8 + band(a.reg, 7) -- !x64: no VREG support.
+	if a.reg == -1 then
+	  vreg = a.vreg
+	  opcode = 0xb8
+	else
+	  opcode = 0xb8 + band(a.reg, 7)
+	end
 	rex = a.reg > 7 and 9 or 8
       end
     end
     wputop(sz, opcode, rex)
+    if vreg then waction("VREG", vreg); wputxb(0) end
     waction("IMM_D", format("(unsigned int)(%s)", op64))
     waction("IMM_D", format("(unsigned int)((%s)>>32)", op64))
   end

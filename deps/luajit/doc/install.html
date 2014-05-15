@@ -4,7 +4,7 @@
 <title>Installation</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <meta name="Author" content="Mike Pall">
-<meta name="Copyright" content="Copyright (C) 2005-2013, Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2014, Mike Pall">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
@@ -120,7 +120,7 @@ operating systems, CPUs and compilers:
 <tr class="even">
 <td class="compatcpu">x64 (64 bit)</td>
 <td class="compatos">GCC 4.x</td>
-<td class="compatos compatno">&nbsp;</td>
+<td class="compatos">ORBIS (<a href="#ps4">PS4</a>)</td>
 <td class="compatos">GCC 4.x</td>
 <td class="compatos">MSVC + SDK v7.0<br>WinSDK v7.0</td>
 </tr>
@@ -188,8 +188,8 @@ open a terminal window and change to this directory. Now unpack the archive
 and change to the newly created directory:
 </p>
 <pre class="code">
-tar zxf LuaJIT-2.0.2.tar.gz
-cd LuaJIT-2.0.2</pre>
+tar zxf LuaJIT-2.0.3.tar.gz
+cd LuaJIT-2.0.3</pre>
 <h3>Building LuaJIT</h3>
 <p>
 The supplied Makefiles try to auto-detect the settings needed for your
@@ -460,12 +460,28 @@ make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
 </pre>
 <p>
 You can cross-compile for <b id="ps3">PS3</b> using the PS3&nbsp;SDK from
-a Linux host or a Windows host (requires 32 bit MinGW (GCC) on the host,
+a Linux host or a Windows host (requires 32&nbsp;bit MinGW (GCC) on the host,
 too). Due to restrictions on consoles, the JIT compiler is disabled and
 only the fast interpreter is built:
 </p>
 <pre class="code">
 make HOST_CC="gcc -m32" CROSS=ppu-lv2-
+</pre>
+<p>
+You can cross-compile for <b id="ps4">PS4</b> from a Windows host using
+the PS4&nbsp;SDK (ORBIS) plus 64&nbsp;bit MSVC. Due to restrictions on
+consoles, the JIT compiler is disabled and only the fast interpreter
+is built.
+</p>
+<p>
+Open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and run
+the following commands. This builds a static library <tt>libluajit.a</tt>,
+which can be linked against your game, just like the Lua library.
+</p>
+<pre class="code">
+cd src
+ps4build
 </pre>
 <p>
 You can cross-compile for <b id="xbox360">Xbox 360</b> using the
@@ -565,9 +581,11 @@ for a regular distribution build:
 <ul>
 <li><tt>PREFIX</tt> overrides the installation path and should usually
 be set to <tt>/usr</tt>. Setting this also changes the module paths and
-the <tt>-rpath</tt> of the shared library.</li>
+the paths needed to locate the shared library.</li>
 <li><tt>DESTDIR</tt> is an absolute path which allows you to install
 to a shadow tree instead of the root tree of the build system.</li>
+<li><tt>MULTILIB</tt> sets the architecture-specific library path component
+for multilib systems. The default is <tt>lib</tt>.</li>
 <li>Have a look at the top-level <tt>Makefile</tt> and <tt>src/Makefile</tt>
 for additional variables to tweak. The following variables <em>may</em> be
 overridden, but it's <em>not</em> recommended, except for special needs
@@ -603,7 +621,7 @@ to me (the upstream) and not you (the package maintainer), anyway.
 </div>
 <div id="foot">
 <hr class="hide">
-Copyright &copy; 2005-2013 Mike Pall
+Copyright &copy; 2005-2014 Mike Pall
 <span class="noprint">
 &middot;
 <a href="contact.html">Contact</a>

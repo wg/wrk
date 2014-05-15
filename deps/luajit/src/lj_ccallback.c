@@ -1,6 +1,6 @@
 /*
 ** FFI C callback handling.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -408,6 +408,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   intptr_t *stack = cts->cb.stack;
   MSize slot = cts->cb.slot;
   CTypeID id = 0, rid, fid;
+  int gcsteps = 0;
   CType *ct;
   GCfunc *fn;
   MSize ngpr = 0, nsp = 0, maxgpr = CCALL_NARG_GPR;
@@ -475,7 +476,7 @@ static void callback_conv_args(CTState *cts, lua_State *L)
     done:
       if (LJ_BE && cta->size < CTSIZE_PTR)
 	sp = (void *)((uint8_t *)sp + CTSIZE_PTR-cta->size);
-      lj_cconv_tv_ct(cts, cta, 0, o++, sp);
+      gcsteps += lj_cconv_tv_ct(cts, cta, 0, o++, sp);
     }
     fid = ctf->sib;
   }
@@ -485,6 +486,8 @@ static void callback_conv_args(CTState *cts, lua_State *L)
   if (ctype_cconv(ct->info) != CTCC_CDECL)
     (L->base-2)->u32.hi |= (nsp << (16+2));
 #endif
+  while (gcsteps-- > 0)
+    lj_gc_check(L);
 }
 
 /* Convert Lua object to callback result. */

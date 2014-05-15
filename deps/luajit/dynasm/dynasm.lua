@@ -2,7 +2,7 @@
 -- DynASM. A dynamic assembler for code generation engines.
 -- Originally designed and implemented for LuaJIT.
 --
--- Copyright (C) 2005-2013 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
 -- See below for full copyright notice.
 ------------------------------------------------------------------------------
 
@@ -17,7 +17,7 @@ local _info = {
   url =		"http://luajit.org/dynasm.html",
   license =	"MIT",
   copyright =	[[
-Copyright (C) 2005-2013 Mike Pall. All rights reserved.
+Copyright (C) 2005-2014 Mike Pall. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
@@ -85,7 +85,7 @@ end
 -- Resync CPP line numbers.
 local function wsync()
   if g_synclineno ~= g_lineno and g_opt.cpp then
-    wline("# "..g_lineno..' "'..g_fname..'"')
+    wline("#line "..g_lineno..' "'..g_fname..'"')
     g_synclineno = g_lineno
   end
 end
@@ -695,6 +695,9 @@ map_op[".arch_1"] = function(params)
   if not params then return "name" end
   local err = loadarch(params[1])
   if err then wfatal(err) end
+  wline(format("#if DASM_VERSION != %d", _info.vernum))
+  wline('#error "Version mismatch between DynASM and included encoding engine"')
+  wline("#endif")
 end
 
 -- Dummy .arch pseudo-opcode to improve the error report.
@@ -877,13 +880,9 @@ local function dasmhead(out)
 ** DO NOT EDIT! The original file is in "%s".
 */
 
-#if DASM_VERSION != %d
-#error "Version mismatch between DynASM and included encoding engine"
-#endif
-
 ]], _info.url,
     _info.version, g_arch._info.arch, g_arch._info.version,
-    g_fname, _info.vernum))
+    g_fname))
 end
 
 -- Read input file.

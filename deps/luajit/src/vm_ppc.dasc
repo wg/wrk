@@ -1,6 +1,6 @@
 |// Low-level VM code for PowerPC CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 |
 |.arch ppc
 |.section code_op, code_sub
@@ -3715,13 +3715,13 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    cmplwi cr1, TMP0, 0
     |   lwz TMP1, 4(RD)
     |  cror 4*cr0+eq, 4*cr0+eq, 4*cr1+eq
-    |   subi TMP2, TMP2, (LJ_TISNUM+1)
+    |   subi TMP2, TMP2, (LJ_TNUMX+1)
     |  bne >2				// Upvalue is closed and black?
     |1:
     |  ins_next
     |
     |2:  // Check if new value is collectable.
-    |  cmplwi TMP2, LJ_TISGCV - (LJ_TISNUM+1)
+    |  cmplwi TMP2, LJ_TISGCV - (LJ_TNUMX+1)
     |  bge <1				// tvisgcv(v)
     |  lbz TMP3, GCOBJ:TMP1->gch.marked
     |  andix. TMP3, TMP3, LJ_GC_WHITES	// iswhite(v)

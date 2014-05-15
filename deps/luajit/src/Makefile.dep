@@ -17,8 +17,8 @@ lib_ffi.o: lib_ffi.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
  lj_ccallback.h lj_clib.h lj_ff.h lj_ffdef.h lj_lib.h lj_libdef.h
 lib_init.o: lib_init.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h
 lib_io.o: lib_io.c lua.h luaconf.h lauxlib.h lualib.h lj_obj.h lj_def.h \
- lj_arch.h lj_err.h lj_errmsg.h lj_str.h lj_state.h lj_ff.h lj_ffdef.h \
- lj_lib.h lj_libdef.h
+ lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_state.h lj_ff.h \
+ lj_ffdef.h lj_lib.h lj_libdef.h
 lib_jit.o: lib_jit.c lua.h luaconf.h lauxlib.h lualib.h lj_arch.h \
  lj_obj.h lj_def.h lj_err.h lj_errmsg.h lj_debug.h lj_str.h lj_tab.h \
  lj_bc.h lj_ir.h lj_jit.h lj_ircall.h lj_iropt.h lj_target.h \
@@ -129,8 +129,8 @@ lj_load.o: lj_load.c lua.h luaconf.h lauxlib.h lj_obj.h lj_def.h \
  lj_arch.h lj_gc.h lj_err.h lj_errmsg.h lj_str.h lj_func.h lj_frame.h \
  lj_bc.h lj_vm.h lj_lex.h lj_bcdump.h lj_parse.h
 lj_mcode.o: lj_mcode.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h \
- lj_gc.h lj_jit.h lj_ir.h lj_mcode.h lj_trace.h lj_dispatch.h lj_bc.h \
- lj_traceerr.h lj_vm.h
+ lj_gc.h lj_err.h lj_errmsg.h lj_jit.h lj_ir.h lj_mcode.h lj_trace.h \
+ lj_dispatch.h lj_bc.h lj_traceerr.h lj_vm.h
 lj_meta.o: lj_meta.c lj_obj.h lua.h luaconf.h lj_def.h lj_arch.h lj_gc.h \
  lj_err.h lj_errmsg.h lj_str.h lj_tab.h lj_meta.h lj_frame.h lj_bc.h \
  lj_vm.h lj_strscan.h

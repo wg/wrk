@@ -1,6 +1,6 @@
 /*
 ** Debugging and introspection.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_debug_c
@@ -71,9 +71,18 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
       /* Lua function below errfunc/gc/hook: find cframe to get the PC. */
       void *cf = cframe_raw(L->cframe);
       TValue *f = L->base-1;
-      if (cf == NULL)
-	return NO_BCPOS;
-      while (f > nextframe) {
+      for (;;) {
+	if (cf == NULL)
+	  return NO_BCPOS;
+	while (cframe_nres(cf) < 0) {
+	  if (f >= restorestack(L, -cframe_nres(cf)))
+	    break;
+	  cf = cframe_raw(cframe_prev(cf));
+	  if (cf == NULL)
+	    return NO_BCPOS;
+	}
+	if (f < nextframe)
+	  break;
 	if (frame_islua(f)) {
 	  f = frame_prevl(f);
 	} else {
@@ -82,8 +91,6 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 	  f = frame_prevd(f);
 	}
       }
-      if (cframe_prev(cf))
-	cf = cframe_raw(cframe_prev(cf));
       ins = cframe_pc(cf);
     }
   }

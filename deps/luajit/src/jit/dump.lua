@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT compiler dump module.
 --
--- Copyright (C) 2005-2013 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -36,6 +36,7 @@
 --  * m  Dump the generated machine code.
 --    x  Print each taken trace exit.
 --    X  Print each taken trace exit and the contents of all registers.
+--    a  Print the IR of aborted traces, too.
 --
 -- The output format can be set with the following characters:
 --
@@ -54,7 +55,7 @@
 
 -- Cache some library functions and objects.
 local jit = require("jit")
-assert(jit.version_num == 20002, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20003, "LuaJIT core/library version mismatch")
 local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
 local funcinfo, funcbc = jutil.funcinfo, jutil.funcbc
@@ -546,10 +547,8 @@ local function dump_trace(what, tr, func, pc, otr, oex)
     out:write("---- TRACE ", tr, " ", what)
     if otr then out:write(" ", otr, "/", oex) end
     out:write(" ", fmtfunc(func, pc), "\n")
-    recprefix = ""
   elseif what == "stop" or what == "abort" then
     out:write("---- TRACE ", tr, " ", what)
-    recprefix = nil
     if what == "abort" then
       out:write(" ", fmtfunc(func, pc), " -- ", fmterr(otr, oex), "\n")
     else

@@ -1,6 +1,6 @@
 /*
 ** FFI C library loader.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -144,9 +144,6 @@ static void *clib_getsym(CLibrary *cl, const char *name)
 #elif LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
-#ifndef WINVER
-#define WINVER 0x0500
-#endif
 #include <windows.h>
 
 #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
@@ -220,7 +217,7 @@ static void clib_unloadlib(CLibrary *cl)
 	FreeLibrary((HINSTANCE)h);
       }
     }
-  } else if (!cl->handle) {
+  } else if (cl->handle) {
     FreeLibrary((HINSTANCE)cl->handle);
   }
 }

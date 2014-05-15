@@ -4,7 +4,7 @@
 <title>LuaJIT Change History</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <meta name="Author" content="Mike Pall">
-<meta name="Copyright" content="Copyright (C) 2005-2013, Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2014, Mike Pall">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
@@ -63,7 +63,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.2</strong>.<br>
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.3</strong>.<br>
 </p>
 <p>
 Please check the
@@ -72,6 +72,42 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.0.3">LuaJIT 2.0.3 &mdash; 2014-03-12</h2>
+<ul>
+<li>Add PS4 port.</li>
+<li>Add support for multilib distro builds.</li>
+<li>Fix OSX build.</li>
+<li>Fix MinGW build.</li>
+<li>Fix Xbox 360 build.</li>
+<li>Improve ULOAD forwarding for open upvalues.</li>
+<li>Fix GC steps threshold handling when called by JIT-compiled code.</li>
+<li>Fix argument checks for <tt>math.deg()</tt> and <tt>math.rad()</tt>.</li>
+<li>Fix <tt>jit.flush(func|true)</tt>.</li>
+<li>Respect <tt>jit.off(func)</tt> when returning to a function, too.</li>
+<li>Fix compilation of <tt>string.byte(s, nil, n)</tt>.</li>
+<li>Fix line number for relocated bytecode after closure fixup</li>
+<li>Fix frame traversal for backtraces.</li>
+<li>Fix ABC elimination.</li>
+<li>Fix handling of redundant PHIs.</li>
+<li>Fix snapshot restore for exit to function header.</li>
+<li>Fix type punning alias analysis for constified pointers</li>
+<li>Fix call unroll checks in the presence of metamethod frames.</li>
+<li>Fix initial maxslot for down-recursive traces.</li>
+<li>Prevent BASE register coalescing if parent uses <tt>IR_RETF</tt>.</li>
+<li>Don't purge modified function from stack slots in <tt>BC_RET</tt>.</li>
+<li>Fix recording of <tt>BC_VARG</tt>.</li>
+<li>Don't access dangling reference to reallocated IR.</li>
+<li>Fix frame depth display for bytecode dump in <tt>-jdump</tt>.</li>
+<li>ARM: Fix register allocation when rematerializing FPRs.</li>
+<li>x64: Fix store to upvalue for lightuserdata values.</li>
+<li>FFI: Add missing GC steps for callback argument conversions.</li>
+<li>FFI: Properly unload loaded DLLs.</li>
+<li>FFI: Fix argument checks for <tt>ffi.string()</tt>.</li>
+<li>FFI/x64: Fix passing of vector arguments to calls.</li>
+<li>FFI: Rehash finalizer table after GC cycle, if needed.</li>
+<li>FFI: Fix <tt>cts-&gt;L</tt> for cdata unsinking in snapshot restore.</li>
+</ul>
+
 <h2 id="LuaJIT-2.0.2">LuaJIT 2.0.2 &mdash; 2013-06-03</h2>
 <ul>
 <li>Fix memory access check for fast string interning.</li>
@@ -882,7 +918,7 @@ This is the initial non-public release of LuaJIT.
 </div>
 <div id="foot">
 <hr class="hide">
-Copyright &copy; 2005-2013 Mike Pall
+Copyright &copy; 2005-2014 Mike Pall
 <span class="noprint">
 &middot;
 <a href="contact.html">Contact</a>

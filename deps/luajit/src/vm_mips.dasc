@@ -1,6 +1,6 @@
 |// Low-level VM code for MIPS CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 |
 |.arch mips
 |.section code_op, code_sub
@@ -2155,7 +2155,7 @@ static void build_subroutines(BuildCtx *ctx)
   |2:
   |  addiu RC, MULTRES, -8
   |  jr AT
-  |.  add RA, RA, BASE
+  |.  addu RA, RA, BASE
   |
   |3:  // Rethrow error from the right C frame.
   |  load_got lj_err_throw
@@ -2882,12 +2882,12 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  li AT, LJ_GC_BLACK|1
     |  or TMP3, TMP3, TMP0
     |  beq TMP3, AT, >2			// Upvalue is closed and black?
-    |.  addiu TMP2, TMP2, -(LJ_TISNUM+1)
+    |.  addiu TMP2, TMP2, -(LJ_TNUMX+1)
     |1:
     |  ins_next
     |
     |2:  // Check if new value is collectable.
-    |  sltiu AT, TMP2, LJ_TISGCV - (LJ_TISNUM+1)
+    |  sltiu AT, TMP2, LJ_TISGCV - (LJ_TNUMX+1)
     |  beqz AT, <1			// tvisgcv(v)
     |.  lw TMP1, LO(RD)
     |  lbu TMP3, GCOBJ:TMP1->gch.marked

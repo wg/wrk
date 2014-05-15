@@ -1,6 +1,6 @@
 /*
 ** Package library.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2012 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -68,9 +68,6 @@ static const char *ll_bcsym(void *lib, const char *sym)
 #elif LJ_TARGET_WINDOWS
 
 #define WIN32_LEAN_AND_MEAN
-#ifndef WINVER
-#define WINVER 0x0500
-#endif
 #include <windows.h>
 
 #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS

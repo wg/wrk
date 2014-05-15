@@ -1,6 +1,6 @@
 /*
 ** OS library.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -70,7 +70,7 @@ LJLIB_CF(os_rename)
 
 LJLIB_CF(os_tmpname)
 {
-#if LJ_TARGET_PS3
+#if LJ_TARGET_PS3 || LJ_TARGET_PS4
   lj_err_caller(L, LJ_ERR_OSUNIQF);
   return 0;
 #else

@@ -1,6 +1,6 @@
 /*
 ** Trace recorder for C data operations.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_ffrecord_c
@@ -1514,7 +1514,7 @@ void LJ_FASTCALL recff_ffi_string(jit_State *J, RecordFFData *rd)
   TRef tr = J->base[0];
   if (tr) {
     TRef trlen = J->base[1];
-    if (trlen) {
+    if (!tref_isnil(trlen)) {
       trlen = crec_toint(J, cts, trlen, &rd->argv[1]);
       tr = crec_ct_tv(J, ctype_get(cts, CTID_P_CVOID), 0, tr, &rd->argv[0]);
     } else {

@@ -1,6 +1,6 @@
 /*
 ** PPC IR assembler (SSA IR -> machine code).
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /* -- Register allocator extensions --------------------------------------- */
@@ -381,6 +381,7 @@ static void asm_retf(ASMState *as, IRIns *ir)
   int32_t delta = 1+bc_a(*((const BCIns *)pc - 1));
   as->topslot -= (BCReg)delta;
   if ((int32_t)as->topslot < 0) as->topslot = 0;
+  irt_setmark(IR(REF_BASE)->t);  /* Children must not coalesce with BASE reg. */
   emit_setgl(as, base, jit_base);
   emit_addptr(as, base, -8*delta);
   asm_guardcc(as, CC_NE);
@@ -1901,7 +1902,7 @@ static void asm_head_root_base(ASMState *as)
   Reg r = ir->r;
   if (ra_hasreg(r)) {
     ra_free(as, r);
-    if (rset_test(as->modset, r))
+    if (rset_test(as->modset, r) || irt_ismarked(ir->t))
       ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
     if (r != RID_BASE)
       emit_mr(as, r, RID_BASE);
@@ -1915,7 +1916,7 @@ static RegSet asm_head_side_base(ASMState *as, IRIns *irp, RegSet allow)
   Reg r = ir->r;
   if (ra_hasreg(r)) {
     ra_free(as, r);
-    if (rset_test(as->modset, r))
+    if (rset_test(as->modset, r) || irt_ismarked(ir->t))
       ir->r = RID_INIT;  /* No inheritance for modified BASE register. */
     if (irp->r == r) {
       rset_clear(allow, r);  /* Mark same BASE register as coalesced. */

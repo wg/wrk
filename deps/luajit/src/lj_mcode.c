@@ -1,6 +1,6 @@
 /*
 ** Machine code management.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_mcode_c
@@ -9,6 +9,7 @@
 #include "lj_obj.h"
 #if LJ_HASJIT
 #include "lj_gc.h"
+#include "lj_err.h"
 #include "lj_jit.h"
 #include "lj_mcode.h"
 #include "lj_trace.h"
@@ -78,10 +79,10 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
   VirtualFree(p, 0, MEM_RELEASE);
 }
 
-static void mcode_setprot(void *p, size_t sz, DWORD prot)
+static int mcode_setprot(void *p, size_t sz, DWORD prot)
 {
   DWORD oprot;
-  VirtualProtect(p, sz, prot, &oprot);
+  return !VirtualProtect(p, sz, prot, &oprot);
 }
 
 #elif LJ_TARGET_POSIX
@@ -112,9 +113,9 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
   munmap(p, sz);
 }
 
-static void mcode_setprot(void *p, size_t sz, int prot)
+static int mcode_setprot(void *p, size_t sz, int prot)
 {
-  mprotect(p, sz, prot);
+  return mprotect(p, sz, prot);
 }
 
 #elif LJ_64
@@ -139,8 +140,6 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 {
   lj_mem_free(J2G(J), p, sz);
 }
-
-#define mcode_setprot(p, sz, prot)	UNUSED(p)
 
 #endif
 
@@ -180,11 +179,23 @@ static void mcode_protect(jit_State *J, int prot)
 #define MCPROT_GEN	MCPROT_RW
 #define MCPROT_RUN	MCPROT_RX
 
+/* Protection twiddling failed. Probably due to kernel security. */
+static LJ_NOINLINE void mcode_protfail(jit_State *J)
+{
+  lua_CFunction panic = J2G(J)->panic;
+  if (panic) {
+    lua_State *L = J->L;
+    setstrV(L, L->top++, lj_err_str(L, LJ_ERR_JITPROT));
+    panic(L);
+  }
+}
+
 /* Change protection of MCode area. */
 static void mcode_protect(jit_State *J, int prot)
 {
   if (J->mcprot != prot) {
-    mcode_setprot(J->mcarea, J->szmcarea, prot);
+    if (LJ_UNLIKELY(mcode_setprot(J->mcarea, J->szmcarea, prot)))
+      mcode_protfail(J);
     J->mcprot = prot;
   }
 }
@@ -305,7 +316,8 @@ void lj_mcode_commit(jit_State *J, MCode *top)
 /* Abort the reservation. */
 void lj_mcode_abort(jit_State *J)
 {
-  mcode_protect(J, MCPROT_RUN);
+  if (J->mcarea)
+    mcode_protect(J, MCPROT_RUN);
 }
 
 /* Set/reset protection to allow patching of MCode areas. */
@@ -318,8 +330,8 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
   if (finish) {
     if (J->mcarea == ptr)
       mcode_protect(J, MCPROT_RUN);
-    else
-      mcode_setprot(ptr, ((MCLink *)ptr)->size, MCPROT_RUN);
+    else if (LJ_UNLIKELY(mcode_setprot(ptr, ((MCLink *)ptr)->size, MCPROT_RUN)))
+      mcode_protfail(J);
     return NULL;
   } else {
     MCode *mc = J->mcarea;
@@ -333,7 +345,8 @@ MCode *lj_mcode_patch(jit_State *J, MCode *ptr, int finish)
       mc = ((MCLink *)mc)->next;
       lua_assert(mc != NULL);
       if (ptr >= mc && ptr < (MCode *)((char *)mc + ((MCLink *)mc)->size)) {
-	mcode_setprot(mc, ((MCLink *)mc)->size, MCPROT_GEN);
+	if (LJ_UNLIKELY(mcode_setprot(mc, ((MCLink *)mc)->size, MCPROT_GEN)))
+	  mcode_protfail(J);
 	return mc;
       }
     }

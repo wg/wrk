@@ -1,6 +1,6 @@
 /*
 ** Trace compiler error messages.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /* This file may be included multiple times with different TREDEF macros. */
@@ -20,7 +20,7 @@ TREDEF(LUNROLL,	"loop unroll limit reached")
 
 /* Recording calls/returns. */
 TREDEF(BADTYPE,	"bad argument type")
-TREDEF(CJITOFF,	"call to JIT-disabled function")
+TREDEF(CJITOFF,	"JIT compilation disabled for function")
 TREDEF(CUNROLL,	"call unroll limit reached")
 TREDEF(DOWNREC,	"down-recursion, restarting")
 TREDEF(NYICF,	"NYI: C function %p")

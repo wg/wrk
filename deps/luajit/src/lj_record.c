@@ -1,6 +1,6 @@
 /*
 ** Trace recorder (bytecode -> SSA IR).
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_record_c
@@ -701,7 +701,7 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
        (!frame_islua(frame) ||
 	(J->parent == 0 && !bc_isret(bc_op(J->cur.startins))))) {
     /* NYI: specialize to frame type and return directly, not via RET*. */
-    for (i = -1; i < (ptrdiff_t)rbase; i++)
+    for (i = 0; i < (ptrdiff_t)rbase; i++)
       J->base[i] = 0;  /* Purge dead slots. */
     J->maxslot = rbase + (BCReg)gotresults;
     rec_stop(J, LJ_TRLINK_RETURN, 0);  /* Return to interpreter. */
@@ -722,6 +722,8 @@ void lj_record_ret(jit_State *J, BCReg rbase, ptrdiff_t gotresults)
     ptrdiff_t nresults = bc_b(callins) ? (ptrdiff_t)bc_b(callins)-1 :gotresults;
     BCReg cbase = bc_a(callins);
     GCproto *pt = funcproto(frame_func(frame - (cbase+1)));
+    if ((pt->flags & PROTO_NOJIT))
+      lj_trace_err(J, LJ_TRERR_CJITOFF);
     if (J->framedepth == 0 && J->pt && frame == J->L->base - 1) {
       if (check_downrec_unroll(J, pt)) {
 	J->maxslot = (BCReg)(rbase + gotresults);
@@ -1387,6 +1389,7 @@ static void check_call_unroll(jit_State *J, TraceNo lnk)
   int32_t count = 0;
   if ((J->pt->flags & PROTO_VARARG)) depth--;  /* Vararg frame still missing. */
   for (; depth > 0; depth--) {  /* Count frames with same prototype. */
+    if (frame_iscont(frame)) depth--;
     frame = frame_prev(frame);
     if (mref(frame_func(frame)->l.pc, void) == pc)
       count++;
@@ -1505,10 +1508,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
     } else if (dst + nresults > J->maxslot) {
       J->maxslot = dst + (BCReg)nresults;
     }
-    for (i = 0; i < nresults; i++) {
-      J->base[dst+i] = i < nvararg ? J->base[i - nvararg - 1] : TREF_NIL;
-      lua_assert(J->base[dst+i] != 0);
-    }
+    for (i = 0; i < nresults; i++)
+      J->base[dst+i] = i < nvararg ? getslot(J, i - nvararg - 1) : TREF_NIL;
   } else {  /* Unknown number of varargs passed to trace. */
     TRef fr = emitir(IRTI(IR_SLOAD), 0, IRSLOAD_READONLY|IRSLOAD_FRAME);
     int32_t frofs = 8*(1+numparams)+FRAME_VARG;
@@ -2128,7 +2129,7 @@ static const BCIns *rec_setup_root(jit_State *J)
   case BC_RET0:
   case BC_RET1:
     /* No bytecode range check for down-recursive root traces. */
-    J->maxslot = ra + bc_d(ins);
+    J->maxslot = ra + bc_d(ins) - 1;
     break;
   case BC_FUNCF:
     /* No bytecode range check for root traces started by a hot call. */

@@ -1,6 +1,6 @@
 /*
 ** Table handling.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -350,6 +350,13 @@ static void rehashtab(lua_State *L, GCtab *t, cTValue *ek)
   total -= na;
   resizetab(L, t, asize, hsize2hbits(total));
 }
+
+#if LJ_HASFFI
+void lj_tab_rehash(lua_State *L, GCtab *t)
+{
+  rehashtab(L, t, niltv(L));
+}
+#endif
 
 void lj_tab_reasize(lua_State *L, GCtab *t, uint32_t nasize)
 {

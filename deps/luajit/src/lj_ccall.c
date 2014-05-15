@@ -1,6 +1,6 @@
 /*
 ** FFI C call handling.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -173,9 +173,10 @@
 
 #define CCALL_HANDLE_REGARG \
   if (isfp) {  /* Try to pass argument in FPRs. */ \
-    if (nfpr + n <= CCALL_NARG_FPR) { \
+    int n2 = ctype_isvector(d->info) ? 1 : n; \
+    if (nfpr + n2 <= CCALL_NARG_FPR) { \
       dp = &cc->fpr[nfpr]; \
-      nfpr += n; \
+      nfpr += n2; \
       goto done; \
     } \
   } else {  /* Try to pass argument in GPRs. */ \

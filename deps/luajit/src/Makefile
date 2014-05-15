@@ -7,12 +7,12 @@
 # Also works with MinGW and Cygwin on Windows.
 # Please check msvcbuild.bat for building with MSVC on Windows.
 #
-# Copyright (C) 2005-2012 Mike Pall. See Copyright Notice in luajit.h
+# Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 ##############################################################################
 
 MAJVER=  2
 MINVER=  0
-RELVER=  2
+RELVER=  3
 ABIVER=  5.1
 NODOTABIVER= 51
 
@@ -188,9 +188,10 @@ TARGET_LD= $(CROSS)$(CC)
 TARGET_AR= $(CROSS)ar rcus
 TARGET_STRIP= $(CROSS)strip
 
+TARGET_LIBPATH= $(or $(PREFIX),/usr/local)/$(or $(MULTILIB),lib)
 TARGET_SONAME= libluajit-$(ABIVER).so.$(MAJVER)
 TARGET_DYLIBNAME= libluajit-$(ABIVER).$(MAJVER).dylib
-TARGET_DYLIBPATH= $(or $(PREFIX),/usr/local)/lib/$(TARGET_DYLIBNAME)
+TARGET_DYLIBPATH= $(TARGET_LIBPATH)/$(TARGET_DYLIBNAME)
 TARGET_DLLNAME= lua$(NODOTABIVER).dll
 TARGET_XSHLDFLAGS= -shared -fPIC -Wl,-soname,$(TARGET_SONAME)
 TARGET_DYNXLDOPTS=
@@ -249,11 +250,17 @@ TARGET_ARCH+= $(patsubst %,-DLUAJIT_TARGET=LUAJIT_ARCH_%,$(TARGET_LJARCH))
 
 ifneq (,$(PREFIX))
 ifneq (/usr/local,$(PREFIX))
-  TARGET_XCFLAGS+= -DLUA_XROOT=\"$(PREFIX)/\"
+  TARGET_XCFLAGS+= -DLUA_ROOT=\"$(PREFIX)\"
   ifneq (/usr,$(PREFIX))
-    TARGET_DYNXLDOPTS= -Wl,-rpath,$(PREFIX)/lib
+    TARGET_DYNXLDOPTS= -Wl,-rpath,$(TARGET_LIBPATH)
   endif
 endif
+endif
+ifneq (,$(MULTILIB))
+  TARGET_XCFLAGS+= -DLUA_MULTILIB=\"$(MULTILIB)\"
+endif
+ifneq (,$(LMULTILIB))
+  TARGET_XCFLAGS+= -DLUA_LMULTILIB=\"$(LMULTILIB)\"
 endif
 
 ##############################################################################
@@ -287,7 +294,9 @@ ifeq (Darwin,$(TARGET_SYS))
   endif
   TARGET_STRIP+= -x
   TARGET_AR+= 2>/dev/null
-  TARGET_XCFLAGS+= -fno-stack-protector
+  ifeq (,$(shell $(TARGET_CC) -o /dev/null -c -x c /dev/null -fno-stack-protector 2>/dev/null || echo 1))
+    TARGET_XCFLAGS+= -fno-stack-protector
+  endif
   TARGET_XSHLDFLAGS= -dynamiclib -single_module -undefined dynamic_lookup -fPIC
   TARGET_DYNXLDOPTS=
   TARGET_XSHLDFLAGS+= -install_name $(TARGET_DYLIBPATH) -compatibility_version $(MAJVER).$(MINVER) -current_version $(MAJVER).$(MINVER).$(RELVER)

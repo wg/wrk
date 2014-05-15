@@ -4,7 +4,7 @@
 <title>FFI Semantics</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <meta name="Author" content="Mike Pall">
-<meta name="Copyright" content="Copyright (C) 2005-2013, Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2014, Mike Pall">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
@@ -1188,7 +1188,9 @@ storing and initializing them are supported, yet.</li>
 <li>The <tt>volatile</tt> type qualifier is currently ignored by
 compiled code.</li>
 <li><a href="ext_ffi_api.html#ffi_cdef"><tt>ffi.cdef</tt></a> silently
-ignores all re-declarations.</li>
+ignores most re-declarations. Note: avoid re-declarations which do not
+conform to C99. The implementation will eventually be changed to
+perform strict checks.</li>
 </ul>
 <p>
 The JIT compiler already handles a large subset of all FFI operations.
@@ -1233,7 +1235,7 @@ compiled.</li>
 </div>
 <div id="foot">
 <hr class="hide">
-Copyright &copy; 2005-2013 Mike Pall
+Copyright &copy; 2005-2014 Mike Pall
 <span class="noprint">
 &middot;
 <a href="contact.html">Contact</a>

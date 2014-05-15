@@ -1,6 +1,6 @@
 /*
 ** Error handling.
-** Copyright (C) 2005-2013 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_err_c
@@ -196,7 +196,7 @@ static void *err_unwind(lua_State *L, void *stopcf, int errcode)
 typedef struct _Unwind_Exception
 {
   uint64_t exclass;
-  void (*excleanup)(int, struct _Unwind_Exception);
+  void (*excleanup)(int, struct _Unwind_Exception *);
   uintptr_t p1, p2;
 } __attribute__((__aligned__)) _Unwind_Exception;
 
