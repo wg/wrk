@@ -231,7 +231,7 @@ void *thread_main(void *arg) {
     thread *thread = arg;
     aeEventLoop *loop = thread->loop;
 
-    thread->cs = zmalloc(thread->connections * sizeof(connection));
+    thread->cs = zcalloc(thread->connections * sizeof(connection));
     tinymt64_init(&thread->rand, time_us());
     thread->latency = stats_alloc(100000);
 
