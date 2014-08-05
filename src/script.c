@@ -77,7 +77,9 @@ void script_init(lua_State *L, char *script, int argc, char **argv) {
 void script_request(lua_State *L, char **buf, size_t *len) {
     lua_getglobal(L, "request");
     lua_call(L, 0, 1);
-    *buf = (char *) lua_tolstring(L, 1, len);
+    const char *str = lua_tolstring(L, 1, len);
+    *buf = realloc(*buf, *len);
+    memcpy(*buf, str, *len);
     lua_pop(L, 1);
 }
 
@@ -189,7 +191,7 @@ size_t script_verify_request(lua_State *L) {
         .on_message_complete = verify_request
     };
     http_parser parser;
-    char *request;
+    char *request = NULL;
     size_t len, count = 0;
 
     script_request(L, &request, &len);
