@@ -8,6 +8,14 @@ wrk - a HTTP benchmarking tool
   processing, and custom reporting. Several example scripts are located in
   scripts/
 
+Installation
+
+  Debian:
+  https://github.com/wg/wrk/wiki/Installing-Wrk-on-Linux
+
+  OSX:
+  https://github.com/wg/wrk/wiki/Installing-wrk-on-OSX
+
 Basic Usage
 
   wrk -t12 -c400 -d30s http://127.0.0.1:8080/index.html
@@ -83,6 +91,11 @@ Scripting
         timeout = N  -- total request timeouts
       }
     }
+
+More Examples
+
+  There are several script examples in the scripts/ folder
+
 
 Benchmarking Tips
 
