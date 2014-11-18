@@ -4,7 +4,5 @@ init = function(args)
 end
 
 request = function()
-    req = wrk.format("GET", target_url)
-    print(req)
-    return req
+    return wrk.format("GET", target_url)
 end
