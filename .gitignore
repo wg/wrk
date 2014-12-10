@@ -1,3 +1,4 @@
 *.o
 *.a
 wrk
+/deps/
