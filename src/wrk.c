@@ -140,8 +140,9 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = connections;
         t->stop_at     = stop_at;
+        t->id = i;
 
-        t->L = script_create(schema, host, port, path);
+        t->L = script_create(schema, host, port, path, &t->id, &cfg.threads);
         script_headers(t->L, headers);
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 

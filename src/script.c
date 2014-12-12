@@ -21,7 +21,7 @@ static const struct luaL_reg statslib[] = {
     { NULL,      NULL             }
 };
 
-lua_State *script_create(char *scheme, char *host, char *port, char *path) {
+lua_State *script_create(char *scheme, char *host, char *port, char *path, uint64_t *tid, uint64_t *nthr) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     luaL_dostring(L, "wrk = require \"wrk\"");
@@ -31,11 +31,13 @@ lua_State *script_create(char *scheme, char *host, char *port, char *path) {
     lua_pop(L, 1);
 
     const table_field fields[] = {
-        { "scheme", LUA_TSTRING, scheme },
-        { "host",   LUA_TSTRING, host   },
-        { "port",   LUA_TSTRING, port   },
-        { "path",   LUA_TSTRING, path   },
-        { NULL,     0,           NULL   },
+        { "scheme",   LUA_TSTRING, scheme },
+        { "host",     LUA_TSTRING, host   },
+        { "port",     LUA_TSTRING, port   },
+        { "path",     LUA_TSTRING, path   },
+        { "threadid", LUA_TNUMBER, tid    },
+        { "nthreads", LUA_TNUMBER, nthr   },
+        { NULL,       0,           NULL   },
     };
 
     lua_getglobal(L, "wrk");
