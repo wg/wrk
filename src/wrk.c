@@ -10,6 +10,7 @@ static struct config {
     uint64_t duration;
     uint64_t timeout;
     uint64_t pipeline;
+    uint64_t bufsize;
     bool     latency;
     bool     dynamic;
     char    *script;
@@ -43,6 +44,7 @@ static void handler(int sig) {
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
+           "    -b, --bufsize     <N>  Receive buffer size        \n"
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
@@ -561,9 +563,13 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->bufsize     = RECVBUF;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "b:t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
+            case 'b':
+                if (scan_metric(optarg, &cfg->bufsize)) return -1;
+                break;
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
                 break;
