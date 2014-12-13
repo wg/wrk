@@ -1,5 +1,6 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
+#include <stdbool.h>
 #include "wrk.h"
 #include "main.h"
 
@@ -416,7 +417,10 @@ static int response_complete(http_parser *parser) {
 
     if (c->headers.buffer) {
         *c->headers.cursor++ = '\0';
-        script_response(thread->L, status, &c->headers, &c->body);
+        if (script_response(thread->L, status, &c->headers, &c->body) == false) {
+            aeStop(thread->loop);
+            goto done;
+        }
         c->state = FIELD;
     }
 
@@ -469,7 +473,10 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     thread *thread = c->thread;
 
     if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length);
+        if (script_request(thread->L, &c->request, &c->length) == false) {
+            aeStop(loop);
+            return;
+        }
     }
 
     char  *buf = c->request + c->written;
