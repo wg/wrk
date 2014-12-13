@@ -139,11 +139,15 @@ int main(int argc, char **argv) {
     uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
-        thread *t = &threads[i];
+        thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = connections;
-        t->stop_at     = stop_at;
-        t->id = i;
+        t->id          = i;
+        if (cfg.duration) {
+            t->stop_at = stop_at;
+        } else {
+            t->stop_at = 0;
+        }
 
         t->L = script_create(schema, host, port, path, &t->id, &cfg.threads);
         script_headers(t->L, headers);
@@ -348,7 +352,7 @@ static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
         }
     }
 
-    if (stop || now >= thread->stop_at) {
+    if (stop || (thread->stop_at > 0 && now >= thread->stop_at)) {
         aeStop(loop);
     }
 
@@ -424,7 +428,7 @@ static int response_complete(http_parser *parser) {
         c->state = FIELD;
     }
 
-    if (now >= thread->stop_at) {
+    if (thread->stop_at > 0 && now >= thread->stop_at) {
         aeStop(thread->loop);
         goto done;
     }
@@ -569,7 +573,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
     cfg->connections = 10;
-    cfg->duration    = 10;
+    cfg->duration    = 0;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
     cfg->bufsize     = RECVBUF;
 
@@ -612,7 +616,7 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
         }
     }
 
-    if (optind == argc || !cfg->threads || !cfg->duration) return -1;
+    if (optind == argc || !cfg->threads || (!cfg->duration && !cfg->script)) return -1;
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");

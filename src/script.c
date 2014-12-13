@@ -104,8 +104,10 @@ bool script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
     lua_call(L, 3, 0);
     if (lua_toboolean(L, 0)) {
+        lua_pop(L, 1);
         return true;
     } else {
+        lua_pop(L, 1);
         return false;
     }
 
