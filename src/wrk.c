@@ -550,6 +550,7 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 }
 
 static struct option longopts[] = {
+    { "bufsize",     required_argument, NULL, 'b' },
     { "connections", required_argument, NULL, 'c' },
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
