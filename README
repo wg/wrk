@@ -36,14 +36,22 @@ Scripting
     done     = function(summary, latency, requests)
 
     wrk = {
-      scheme  = "http",
-      host    = "localhost",
-      port    = nil,
-      method  = "GET",
-      path    = "/",
-      headers = {},
-      body    = nil
+      scheme   = "http",
+      host     = "localhost",
+      port     = nil,
+      method   = "GET",
+      path     = "/",
+      headers  = {},
+      body     = nil
+      threadid = 0,
+      nthreads = 0,
     }
+
+      The threadid and nthreads table members provide information about the
+      running thread and configuration to the lua script. wrk.threadid is a
+      Lua number, and its value represents the thread in which the script
+      is running. wrk.nthreads is a number that represents the number of
+      running threads in the process.
 
     function wrk.format(method, path, headers, body)
 
@@ -58,6 +66,12 @@ Scripting
   The init() function receives any extra command line arguments for the
   script. Script arguments must be separated from wrk arguments with "--"
   and scripts that override init() but not request() must call wrk.init()
+
+  The request() function, if returning nil instead of a valid HTTP request
+  line, will cause the current thread's event loop to exit.
+
+  The response() function is a boolean returning either true or false. If
+  false is returned, the current thread's event loop exits.
 
   The done() function receives a table containing result data, and two
   statistics objects representing the sampled per-request latency and
