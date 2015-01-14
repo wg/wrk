@@ -102,17 +102,18 @@ bool script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     }
 
     lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
-    lua_call(L, 3, 0);
-    if (lua_toboolean(L, 0)) {
+    lua_call(L, 3, 1);
+
+    buffer_reset(headers);
+    buffer_reset(body);
+
+    if (lua_toboolean(L, -1)) {
         lua_pop(L, 1);
         return true;
     } else {
         lua_pop(L, 1);
         return false;
     }
-
-    buffer_reset(headers);
-    buffer_reset(body);
 }
 
 bool script_is_static(lua_State *L) {
