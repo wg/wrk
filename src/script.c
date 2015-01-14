@@ -82,6 +82,7 @@ bool script_request(lua_State *L, char **buf, size_t *len) {
     lua_call(L, 0, 1);
     const char *str = lua_tolstring(L, 1, len);
     if (str == NULL) {
+        lua_pop(L, 1);
         return false;
     }
     *buf = realloc(*buf, *len);
