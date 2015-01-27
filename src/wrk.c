@@ -14,6 +14,8 @@ static struct config {
     bool     dynamic;
     char    *script;
     SSL_CTX *ctx;
+    WRK_SSL_METHOD_CONST SSL_METHOD *ssl_method;
+    char *ssl_cipher;
 } cfg;
 
 static struct {
@@ -41,6 +43,18 @@ static void handler(int sig) {
 }
 
 static void usage() {
+#ifndef OPENSSL_NO_SSL2
+#define SSL2_HELP_MSG "SSL2, "
+#else
+#define SSL2_HELP_MSG ""
+#endif
+
+#ifdef HAVE_TLSV1_X
+#define TLS1_X_HELP_MSG ", TLS1.1, TLS1.2"
+#else
+#define TLS1_X_HELP_MSG ""
+#endif
+
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
@@ -51,6 +65,9 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
+           "    -Z, --ssl-cipher  <S>  SSL/TLS cipher suite       \n"
+           "    -f, --ssl-proto   <S>  SSL/TLS protocol           \n"
+           "                           (" SSL2_HELP_MSG "SSL3, TLS1" TLS1_X_HELP_MSG " or ALL)\n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -111,7 +128,7 @@ int main(int argc, char **argv) {
     }
 
     if (!strncmp("https", schema, 5)) {
-        if ((cfg.ctx = ssl_init()) == NULL) {
+        if ((cfg.ctx = ssl_init(cfg.ssl_method, cfg.ssl_cipher)) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
             exit(1);
@@ -547,6 +564,8 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "ssl-cipher",  required_argument, NULL, 'Z' },
+    { "ssl-proto",   required_argument, NULL, 'f' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -560,8 +579,10 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->ssl_method  = SSLv23_client_method();
+    cfg->ssl_cipher  = NULL;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrvf:Z:?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -588,6 +609,31 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
+                break;
+            case 'f':
+                if (strcasecmp(optarg, "ALL") == 0) {
+                    cfg->ssl_method = SSLv23_client_method();
+#ifndef OPENSSL_NO_SSL2
+                } else if (strcasecmp(optarg, "SSL2") == 0) {
+                    cfg->ssl_method = SSLv2_client_method();
+#endif
+                } else if (strcasecmp(optarg, "SSL3") == 0) {
+                    cfg->ssl_method = SSLv3_client_method();
+#ifdef HAVE_TLSV1_X
+                } else if (strcasecmp(optarg, "TLS1.1") == 0) {
+                    cfg->ssl_method = TLSv1_1_client_method();
+                } else if (strcasecmp(optarg, "TLS1.2") == 0) {
+                    cfg->ssl_method = TLSv1_2_client_method();
+#endif
+                } else if (strcasecmp(optarg, "TLS1") == 0) {
+                    cfg->ssl_method = TLSv1_client_method();
+                } else {
+                    fprintf(stderr, "invalid SSL/TLS protocol: %s\n", optarg);
+                    return -1;
+                }
+                break;
+            case 'Z':
+                cfg->ssl_cipher = optarg;
                 break;
             case 'h':
             case '?':

@@ -23,7 +23,7 @@ static unsigned long ssl_id() {
     return (unsigned long) pthread_self();
 }
 
-SSL_CTX *ssl_init() {
+SSL_CTX *ssl_init(SSL_METHOD *ssl_method, char *ssl_cipher) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
@@ -38,11 +38,18 @@ SSL_CTX *ssl_init() {
         CRYPTO_set_locking_callback(ssl_lock);
         CRYPTO_set_id_callback(ssl_id);
 
-        if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
+        if ((ctx = SSL_CTX_new(ssl_method))) {
             SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
             SSL_CTX_set_verify_depth(ctx, 0);
             SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
             SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+            if (ssl_cipher != NULL) {
+                if (!SSL_CTX_set_cipher_list(ctx, ssl_cipher)) {
+                    fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
+                    ERR_print_errors_fp(stderr);
+                    exit(1);
+                }
+            }
         }
     }
 
