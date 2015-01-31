@@ -464,8 +464,12 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
-    if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length);
+    if (!c->written) {
+        if (cfg.dynamic) {
+            script_request(thread->L, &c->request, &c->length);
+        }
+        c->start   = time_us();
+        c->pending = cfg.pipeline;
     }
 
     char  *buf = c->request + c->written;
@@ -476,11 +480,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
-    }
-
-    if (!c->written) {
-        c->start = time_us();
-        c->pending = cfg.pipeline;
     }
 
     c->written += n;
