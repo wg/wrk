@@ -7,6 +7,7 @@ static struct config {
     struct addrinfo addr;
     uint64_t threads;
     uint64_t connections;
+    uint64_t max_requests;
     uint64_t duration;
     uint64_t timeout;
     uint64_t pipeline;
@@ -44,6 +45,7 @@ static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
+           "    -r, --thread-reqs <N>  Requests per thread        \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
@@ -140,8 +142,12 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = connections;
         t->stop_at     = stop_at;
+        t->max_requests = cfg.max_requests;
 
-        t->L = script_create(schema, host, port, path);
+        uint64_t* thread_num = zmalloc(sizeof(uint64_t));
+        *thread_num = i;
+
+        t->L = script_create(schema, host, port, path, thread_num);
         script_headers(t->L, headers);
         script_init(t->L, cfg.script, argc - optind, &argv[optind]);
 
@@ -435,6 +441,13 @@ static int response_complete(http_parser *parser) {
     http_parser_init(parser, HTTP_RESPONSE);
 
   done:
+  
+    thread->total_responses++;
+
+    if(cfg.max_requests > 0 && thread->total_responses >= cfg.max_requests) {
+      aeStop(thread->loop);
+    }
+    
     return 0;
 }
 
@@ -463,6 +476,14 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
+    
+    // if(cfg.max_requests > 0 && thread->total_requests >= cfg.max_requests) {
+    //     // aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
+    //     // sock.close(c);
+    //     // close(c->fd);
+    //     return;
+    // }
+    
 
     if (!c->written) {
         if (cfg.dynamic) {
@@ -487,12 +508,14 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         c->written = 0;
         aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     }
-
+    
     return;
 
   error:
     thread->errors.write++;
     reconnect_socket(thread, c);
+    
+    
 }
 
 
@@ -510,7 +533,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
         c->thread->bytes += n;
     } while (n == RECVBUF && sock.readable(c) > 0);
-
+    
     return;
 
   error:
@@ -539,6 +562,7 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 
 static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
+    { "thread-reqs", required_argument, NULL, 'r' },
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
@@ -560,8 +584,11 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "r:t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
+            case 'r':
+                if (scan_metric(optarg, &cfg->max_requests)) return -1;
+                break;
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
                 break;
