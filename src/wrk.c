@@ -552,7 +552,8 @@ static struct option longopts[] = {
 };
 
 static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
-    char c, **header = headers;
+    char **header = headers;
+    int c;
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
