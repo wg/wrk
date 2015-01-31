@@ -7,6 +7,7 @@ static struct config {
     struct addrinfo addr;
     uint64_t threads;
     uint64_t connections;
+    uint64_t samples;
     uint64_t duration;
     uint64_t timeout;
     uint64_t pipeline;
@@ -128,8 +129,8 @@ int main(int argc, char **argv) {
     cfg.addr = *addr;
 
     pthread_mutex_init(&statistics.mutex, NULL);
-    statistics.latency  = stats_alloc(SAMPLES);
-    statistics.requests = stats_alloc(SAMPLES);
+    statistics.latency  = stats_alloc(cfg.samples);
+    statistics.requests = stats_alloc(cfg.samples);
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t connections = cfg.connections / cfg.threads;
@@ -540,6 +541,7 @@ static char *extract_url_part(char *url, struct http_parser_url *parser_url, enu
 static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "duration",    required_argument, NULL, 'd' },
+    { "samples",     required_argument, NULL, 'S' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
@@ -557,16 +559,20 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
     cfg->connections = 10;
+    cfg->samples     = 10000000;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:S:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
                 break;
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
+                break;
+            case 'S':
+                if (scan_metric(optarg, &cfg->samples)) return -1;
                 break;
             case 'd':
                 if (scan_time(optarg, &cfg->duration)) return -1;
