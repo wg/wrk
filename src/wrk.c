@@ -3,14 +3,19 @@
 #include "wrk.h"
 #include "main.h"
 
+#define MAX_DNS_RR 10	// maximum number of DNS A records supported for host
+
 static struct config {
-    struct addrinfo addr;
+    struct addrinfo addr[MAX_DNS_RR];
+    int      numaddr;
+    int      addridx;
     uint64_t threads;
     uint64_t connections;
     uint64_t duration;
     uint64_t timeout;
     uint64_t pipeline;
     bool     latency;
+    bool     roundrobin;
     bool     dynamic;
     char    *script;
     SSL_CTX *ctx;
@@ -50,6 +55,7 @@ static void usage() {
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
+           "        --roundrobin  <R>  Support round robin DNS    \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -62,6 +68,9 @@ int main(int argc, char **argv) {
     struct http_parser_url parser_url;
     char *url, **headers;
     int rc;
+
+    cfg.numaddr = 0;
+    cfg.addridx = 0;
 
     headers = zmalloc((argc / 2) * sizeof(char *));
 
@@ -101,13 +110,19 @@ int main(int argc, char **argv) {
         if (fd == -1) continue;
         rc = connect(fd, addr->ai_addr, addr->ai_addrlen);
         close(fd);
-        if (rc == 0) break;
-    }
 
-    if (addr == NULL) {
-        char *msg = strerror(errno);
-        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
+        if (rc == 0) {
+            if (addr == NULL) {
+                char *msg = strerror(errno);
+                fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+                exit(1);
+            }
+            
+            cfg.addr[cfg.numaddr++] = *addr;
+
+            // only use the first address if round robin DNS is not supported
+            if (cfg.roundrobin == false) break;	
+	}
     }
 
     if (!strncmp("https", schema, 5)) {
@@ -125,7 +140,7 @@ int main(int argc, char **argv) {
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
-    cfg.addr = *addr;
+//    cfg.addr = *addr;
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -274,7 +289,10 @@ void *thread_main(void *arg) {
 }
 
 static int connect_socket(thread *thread, connection *c) {
-    struct addrinfo addr = cfg.addr;
+    // cycle over DNS A entries with each successive connection
+    struct addrinfo addr = cfg.addr[cfg.addridx++];
+    if (cfg.addridx == cfg.numaddr) cfg.addridx = 0;
+
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
 
@@ -544,6 +562,7 @@ static struct option longopts[] = {
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
+    { "roundrobin",  no_argument,       NULL, 'R' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -579,6 +598,9 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'R':
+                cfg->roundrobin = true;
                 break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
