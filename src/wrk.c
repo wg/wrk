@@ -458,7 +458,6 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
   error:
     c->thread->errors.connect++;
     reconnect_socket(c->thread, c);
-
 }
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
