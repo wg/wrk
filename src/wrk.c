@@ -475,7 +475,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
-    if (!c->written)
+    if (!c->written) {
 	if (cfg.dynamic && script_request(thread->L, &c->request, &c->length) == false) {
             aeStop(loop);
             return;
