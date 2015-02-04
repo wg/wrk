@@ -469,18 +469,19 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
   error:
     c->thread->errors.connect++;
     reconnect_socket(c->thread, c);
-
 }
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
-    if (!c->written && cfg.dynamic) {
-        if (script_request(thread->L, &c->request, &c->length) == false) {
+    if (!c->written)
+	if (cfg.dynamic && script_request(thread->L, &c->request, &c->length) == false) {
             aeStop(loop);
             return;
         }
+        c->start   = time_us();
+        c->pending = cfg.pipeline;
     }
 
     char  *buf = c->request + c->written;
@@ -491,11 +492,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
-    }
-
-    if (!c->written) {
-        c->start = time_us();
-        c->pending = cfg.pipeline;
     }
 
     c->written += n;
@@ -568,7 +564,8 @@ static struct option longopts[] = {
 };
 
 static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
-    char c, **header = headers;
+    char **header = headers;
+    int c;
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
