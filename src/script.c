@@ -1,5 +1,6 @@
 // Copyright (C) 2013 - Will Glozer.  All rights reserved.
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "script.h"
@@ -21,7 +22,7 @@ static const struct luaL_reg statslib[] = {
     { NULL,      NULL             }
 };
 
-lua_State *script_create(char *scheme, char *host, char *port, char *path) {
+lua_State *script_create(char *scheme, char *host, char *port, char *path, uint64_t *tid, uint64_t *nthr) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     luaL_dostring(L, "wrk = require \"wrk\"");
@@ -31,11 +32,13 @@ lua_State *script_create(char *scheme, char *host, char *port, char *path) {
     lua_pop(L, 1);
 
     const table_field fields[] = {
-        { "scheme", LUA_TSTRING, scheme },
-        { "host",   LUA_TSTRING, host   },
-        { "port",   LUA_TSTRING, port   },
-        { "path",   LUA_TSTRING, path   },
-        { NULL,     0,           NULL   },
+        { "scheme",   LUA_TSTRING, scheme },
+        { "host",     LUA_TSTRING, host   },
+        { "port",     LUA_TSTRING, port   },
+        { "path",     LUA_TSTRING, path   },
+        { "threadid", LUA_TNUMBER, tid    },
+        { "nthreads", LUA_TNUMBER, nthr   },
+        { NULL,       0,           NULL   },
     };
 
     lua_getglobal(L, "wrk");
@@ -74,16 +77,21 @@ void script_init(lua_State *L, char *script, int argc, char **argv) {
     lua_call(L, 1, 0);
 }
 
-void script_request(lua_State *L, char **buf, size_t *len) {
+bool script_request(lua_State *L, char **buf, size_t *len) {
     lua_getglobal(L, "request");
     lua_call(L, 0, 1);
     const char *str = lua_tolstring(L, 1, len);
+    if (str == NULL) {
+        lua_pop(L, 1);
+        return false;
+    }
     *buf = realloc(*buf, *len);
     memcpy(*buf, str, *len);
     lua_pop(L, 1);
+    return true;
 }
 
-void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
+bool script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     lua_getglobal(L, "response");
     lua_pushinteger(L, status);
     lua_newtable(L);
@@ -95,10 +103,18 @@ void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     }
 
     lua_pushlstring(L, body->buffer, body->cursor - body->buffer);
-    lua_call(L, 3, 0);
+    lua_call(L, 3, 1);
 
     buffer_reset(headers);
     buffer_reset(body);
+
+    if (lua_toboolean(L, -1)) {
+        lua_pop(L, 1);
+        return true;
+    } else {
+        lua_pop(L, 1);
+        return false;
+    }
 }
 
 bool script_is_static(lua_State *L) {

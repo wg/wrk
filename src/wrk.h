@@ -39,6 +39,7 @@ typedef struct {
     lua_State *L;
     errors errors;
     struct connection *cs;
+    uint64_t id;
 } thread;
 
 typedef struct connection {

@@ -15,4 +15,6 @@ response = function(status, headers, body)
       path  = "/resource"
       wrk.headers["X-Token"] = token
    end
+
+   return true
 end
