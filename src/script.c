@@ -65,22 +65,30 @@ void script_init(lua_State *L, char *script, int argc, char **argv) {
         fprintf(stderr, "%s: %s\n", script, cause);
     }
 
-    lua_getglobal(L, "init");
+    lua_getglobal(L, "wrk");
+    lua_getfield(L, -1, "init");
     lua_newtable(L);
     for (int i = 0; i < argc; i++) {
         lua_pushstring(L, argv[i]);
-        lua_rawseti(L, 2, i);
+        lua_rawseti(L, -2, i);
     }
     lua_call(L, 1, 0);
+    lua_pop(L, 1);
 }
 
 void script_request(lua_State *L, char **buf, size_t *len) {
+    int pop = 1;
     lua_getglobal(L, "request");
+    if (!lua_isfunction(L, -1)) {
+        lua_getglobal(L, "wrk");
+        lua_getfield(L, -1, "request");
+        pop += 2;
+    }
     lua_call(L, 0, 1);
-    const char *str = lua_tolstring(L, 1, len);
+    const char *str = lua_tolstring(L, -1, len);
     *buf = realloc(*buf, *len);
     memcpy(*buf, str, *len);
-    lua_pop(L, 1);
+    lua_pop(L, pop);
 }
 
 void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
@@ -101,27 +109,23 @@ void script_response(lua_State *L, int status, buffer *headers, buffer *body) {
     buffer_reset(body);
 }
 
+bool script_is_function(lua_State *L, char *name) {
+    lua_getglobal(L, name);
+    bool is_function = lua_isfunction(L, -1);
+    lua_pop(L, 1);
+    return is_function;
+}
+
 bool script_is_static(lua_State *L) {
-    lua_getglobal(L, "wrk");
-    lua_getfield(L, 1, "request");
-    lua_getglobal(L, "request");
-    bool is_static = lua_equal(L, 2, 3);
-    lua_pop(L, 3);
-    return is_static;
+    return !script_is_function(L, "request");
 }
 
 bool script_want_response(lua_State *L) {
-    lua_getglobal(L, "response");
-    bool defined = lua_type(L, 1) == LUA_TFUNCTION;
-    lua_pop(L, 1);
-    return defined;
+    return script_is_function(L, "response");
 }
 
 bool script_has_done(lua_State *L) {
-    lua_getglobal(L, "done");
-    bool defined = lua_type(L, 1) == LUA_TFUNCTION;
-    lua_pop(L, 1);
-    return defined;
+    return script_is_function(L, "done");
 }
 
 void script_header_done(lua_State *L, luaL_Buffer *buffer) {

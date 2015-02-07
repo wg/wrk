@@ -1,0 +1,4 @@
+master
+
+ * The wrk global variable is the only global defined by default.
+ * wrk.init() calls the global init(), remove calls to wrk.init().

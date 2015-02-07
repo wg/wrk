@@ -42,16 +42,15 @@ function wrk.init(args)
 
       wrk.headers["Host"] = host
    end
-   req = wrk.format()
-end
 
-function wrk.request()
-   return req
-end
+   if type(init) == "function" then
+      init(args)
+   end
 
-init     = wrk.init
-request  = wrk.request
-response = nil
-done     = nil
+   local req = wrk.format()
+   wrk.request = function()
+      return req
+   end
+end
 
 return wrk
