@@ -4,6 +4,7 @@
 #include <string.h>
 #include "script.h"
 #include "http_parser.h"
+#include "zmalloc.h"
 
 typedef struct {
     char *name;
@@ -11,9 +12,19 @@ typedef struct {
     void *value;
 } table_field;
 
+static int script_addr_tostring(lua_State *);
+static int script_addr_gc(lua_State *);
 static int script_stats_len(lua_State *);
 static int script_stats_get(lua_State *);
+static int script_wrk_lookup(lua_State *);
+static int script_wrk_connect(lua_State *);
 static void set_fields(lua_State *, int index, const table_field *);
+
+static const struct luaL_reg addrlib[] = {
+    { "__tostring", script_addr_tostring },
+    { "__gc"    ,   script_addr_gc       },
+    { NULL,         NULL                 }
+};
 
 static const struct luaL_reg statslib[] = {
     { "__index", script_stats_get },
@@ -26,16 +37,22 @@ lua_State *script_create(char *scheme, char *host, char *port, char *path) {
     luaL_openlibs(L);
     luaL_dostring(L, "wrk = require \"wrk\"");
 
+    luaL_newmetatable(L, "wrk.addr");
+    luaL_register(L, NULL, addrlib);
+    lua_pop(L, 1);
+
     luaL_newmetatable(L, "wrk.stats");
     luaL_register(L, NULL, statslib);
     lua_pop(L, 1);
 
     const table_field fields[] = {
-        { "scheme", LUA_TSTRING, scheme },
-        { "host",   LUA_TSTRING, host   },
-        { "port",   LUA_TSTRING, port   },
-        { "path",   LUA_TSTRING, path   },
-        { NULL,     0,           NULL   },
+        { "scheme",  LUA_TSTRING,   scheme             },
+        { "host",    LUA_TSTRING,   host               },
+        { "port",    LUA_TSTRING,   port               },
+        { "path",    LUA_TSTRING,   path               },
+        { "lookup",  LUA_TFUNCTION, script_wrk_lookup  },
+        { "connect", LUA_TFUNCTION, script_wrk_connect },
+        { NULL,      0,             NULL               },
     };
 
     lua_getglobal(L, "wrk");
@@ -43,6 +60,36 @@ lua_State *script_create(char *scheme, char *host, char *port, char *path) {
     lua_pop(L, 1);
 
     return L;
+}
+
+void script_prepare_setup(lua_State *L, char *script) {
+    if (script && luaL_dofile(L, script)) {
+        const char *cause = lua_tostring(L, -1);
+        fprintf(stderr, "%s: %s\n", script, cause);
+    }
+}
+
+bool script_resolve(lua_State *L, char *host, char *service) {
+    lua_getglobal(L, "wrk");
+
+    lua_getfield(L, -1, "resolve");
+    lua_pushstring(L, host);
+    lua_pushstring(L, service);
+    lua_call(L, 2, 0);
+
+    lua_getfield(L, -1, "addrs");
+    size_t count = lua_objlen(L, -1);
+    lua_pop(L, 2);
+    return count > 0;
+}
+
+struct addrinfo *script_peek_addr(lua_State *L) {
+    lua_getglobal(L, "wrk");
+    lua_getfield(L, -1, "addrs");
+    lua_rawgeti(L, -1, 1);
+    struct addrinfo *addr = lua_touserdata(L, -1);
+    lua_pop(L, 3);
+    return addr;
 }
 
 void script_headers(lua_State *L, char **headers) {
@@ -225,6 +272,34 @@ size_t script_verify_request(lua_State *L) {
     return count;
 }
 
+static struct addrinfo *checkaddr(lua_State *L) {
+    struct addrinfo *addr = luaL_checkudata(L, -1, "wrk.addr");
+    luaL_argcheck(L, addr != NULL, 1, "`addr' expected");
+    return addr;
+}
+
+static int script_addr_tostring(lua_State *L) {
+    struct addrinfo *addr = checkaddr(L);
+    char host[NI_MAXHOST];
+    char service[NI_MAXSERV];
+
+    int flags = NI_NUMERICHOST | NI_NUMERICSERV;
+    int rc = getnameinfo(addr->ai_addr, addr->ai_addrlen, host, NI_MAXHOST, service, NI_MAXSERV, flags);
+    if (rc != 0) {
+        const char *msg = gai_strerror(rc);
+        return luaL_error(L, "addr tostring failed %s", msg);
+    }
+
+    lua_pushfstring(L, "%s:%s", host, service);
+    return 1;
+}
+
+static int script_addr_gc(lua_State *L) {
+    struct addrinfo *addr = checkaddr(L);
+    zfree(addr->ai_addr);
+    return 0;
+}
+
 static stats *checkstats(lua_State *L) {
     stats **s = luaL_checkudata(L, 1, "wrk.stats");
     luaL_argcheck(L, s != NULL, 1, "`stats' expected");
@@ -262,10 +337,57 @@ static int script_stats_len(lua_State *L) {
     return 1;
 }
 
+static int script_wrk_lookup(lua_State *L) {
+    struct addrinfo *addrs;
+    struct addrinfo hints = {
+        .ai_family   = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM
+    };
+    int rc, index = 1;
+
+    const char *host    = lua_tostring(L, -2);
+    const char *service = lua_tostring(L, -1);
+
+    if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
+        const char *msg = gai_strerror(rc);
+        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
+        exit(1);
+    }
+
+    lua_newtable(L);
+    for (struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next) {
+        struct addrinfo *udata = lua_newuserdata(L, sizeof(*udata));
+        luaL_getmetatable(L, "wrk.addr");
+        lua_setmetatable(L, -2);
+
+        *udata = *addr;
+        udata->ai_addr = zmalloc(addr->ai_addrlen);
+        memcpy(udata->ai_addr, addr->ai_addr, addr->ai_addrlen);
+        lua_rawseti(L, -2, index++);
+    }
+
+    freeaddrinfo(addrs);
+    return 1;
+}
+
+static int script_wrk_connect(lua_State *L) {
+    struct addrinfo *addr = checkaddr(L);
+    int fd, connected = 0;
+    if ((fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol)) != -1) {
+        connected = connect(fd, addr->ai_addr, addr->ai_addrlen) == 0;
+        close(fd);
+    }
+    lua_pushboolean(L, connected);
+    return 1;
+}
+
 static void set_fields(lua_State *L, int index, const table_field *fields) {
     for (int i = 0; fields[i].name; i++) {
         table_field f = fields[i];
         switch (f.value == NULL ? LUA_TNIL : f.type) {
+            case LUA_TFUNCTION:
+                lua_pushcfunction(L, (lua_CFunction) f.value);
+                break;
             case LUA_TNUMBER:
                 lua_pushinteger(L, *((lua_Integer *) f.value));
                 break;

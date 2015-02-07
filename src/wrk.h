@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <netdb.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -25,6 +26,7 @@
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
+    struct addrinfo *addr;
     uint64_t connections;
     int interval;
     uint64_t stop_at;

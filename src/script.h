@@ -5,6 +5,9 @@
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <unistd.h>
 #include "stats.h"
 
 typedef struct {
@@ -14,6 +17,9 @@ typedef struct {
 } buffer;
 
 lua_State *script_create(char *, char *, char *, char *);
+void script_prepare_setup(lua_State *, char *);
+bool script_resolve(lua_State *, char *, char *);
+struct addrinfo *script_peek_addr(lua_State *);
 void script_headers(lua_State *, char **);
 size_t script_verify_request(lua_State *L);
 

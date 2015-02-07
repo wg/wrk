@@ -4,7 +4,6 @@
 #include "main.h"
 
 static struct config {
-    struct addrinfo addr;
     uint64_t threads;
     uint64_t connections;
     uint64_t duration;
@@ -58,10 +57,8 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-    struct addrinfo *addrs, *addr;
     struct http_parser_url parser_url;
     char *url, **headers;
-    int rc;
 
     headers = zmalloc((argc / 2) * sizeof(char *));
 
@@ -85,26 +82,9 @@ int main(int argc, char **argv) {
         path = &url[parser_url.field_data[UF_PATH].off];
     }
 
-    struct addrinfo hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
-    };
-
-    if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
-        const char *msg = gai_strerror(rc);
-        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
-
-    for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-        int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-        if (fd == -1) continue;
-        rc = connect(fd, addr->ai_addr, addr->ai_addrlen);
-        close(fd);
-        if (rc == 0) break;
-    }
-
-    if (addr == NULL) {
+    lua_State *L = script_create(schema, host, port, path);
+    script_prepare_setup(L, cfg.script);
+    if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
         exit(1);
@@ -125,7 +105,6 @@ int main(int argc, char **argv) {
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
-    cfg.addr = *addr;
 
     pthread_mutex_init(&statistics.mutex, NULL);
     statistics.latency  = stats_alloc(SAMPLES);
@@ -138,6 +117,7 @@ int main(int argc, char **argv) {
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
+        t->addr        = script_peek_addr(L);
         t->connections = connections;
         t->stop_at     = stop_at;
 
@@ -217,7 +197,6 @@ int main(int argc, char **argv) {
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
-    lua_State *L = threads[0].L;
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
@@ -274,16 +253,16 @@ void *thread_main(void *arg) {
 }
 
 static int connect_socket(thread *thread, connection *c) {
-    struct addrinfo addr = cfg.addr;
+    struct addrinfo *addr = thread->addr;
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
 
-    fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
-    if (connect(fd, addr.ai_addr, addr.ai_addrlen) == -1) {
+    if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
     }
 
