@@ -35,6 +35,10 @@ Scripting
     response = function(status, headers, body)
     done     = function(summary, latency, requests)
 
+  wrk exposes two globals to your script:
+
+    WRK_SCRIPT_PATH = < path to your script file, set via -s >
+
     wrk = {
       scheme  = "http",
       host    = "localhost",
