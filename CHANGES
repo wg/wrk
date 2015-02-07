@@ -1,4 +1,8 @@
-master
+wrk next
 
  * The wrk global variable is the only global defined by default.
  * wrk.init() calls the global init(), remove calls to wrk.init().
+ * Add wrk.lookup(host, port) and wrk.connect(addr) functions.
+ * Add setup phase that calls the global setup() for each thread.
+ * Allow assignment to thread.addr to specify the server address.
+ * Add thread:set(key, value), thread:get(key), and thread:stop().

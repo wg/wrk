@@ -1,6 +1,7 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
 #include "wrk.h"
+#include "script.h"
 #include "main.h"
 
 static struct config {
@@ -82,14 +83,6 @@ int main(int argc, char **argv) {
         path = &url[parser_url.field_data[UF_PATH].off];
     }
 
-    lua_State *L = script_create(schema, host, port, path);
-    script_prepare_setup(L, cfg.script);
-    if (!script_resolve(L, host, service)) {
-        char *msg = strerror(errno);
-        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
-
     if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init()) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
@@ -111,19 +104,25 @@ int main(int argc, char **argv) {
     statistics.requests = stats_alloc(SAMPLES);
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
-    uint64_t connections = cfg.connections / cfg.threads;
-    uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
+    uint64_t stop_at = time_us() + (cfg.duration * 1000000);
+
+    lua_State *L = script_create(cfg.script, schema, host, port, path);
+    if (!script_resolve(L, host, service)) {
+        char *msg = strerror(errno);
+        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+        exit(1);
+    }
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
-        thread *t = &threads[i];
+        thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
-        t->addr        = script_peek_addr(L);
-        t->connections = connections;
+        t->connections = cfg.connections / cfg.threads;
         t->stop_at     = stop_at;
 
-        t->L = script_create(schema, host, port, path);
+        t->L = script_create(cfg.script, schema, host, port, path);
         script_headers(t->L, headers);
-        script_init(t->L, cfg.script, argc - optind, &argv[optind]);
+        script_setup(L, t);
+        script_init(t->L, argc - optind, &argv[optind]);
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
@@ -473,7 +472,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     thread->errors.write++;
     reconnect_socket(thread, c);
 }
-
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;

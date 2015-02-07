@@ -6,13 +6,14 @@
 #include <inttypes.h>
 #include <sys/types.h>
 #include <netdb.h>
+#include <sys/socket.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <lua.h>
 
 #include "stats.h"
 #include "ae.h"
-#include "script.h"
 #include "http_parser.h"
 
 #define VERSION  "3.1.2"
@@ -42,6 +43,12 @@ typedef struct {
     errors errors;
     struct connection *cs;
 } thread;
+
+typedef struct {
+    char  *buffer;
+    size_t length;
+    char  *cursor;
+} buffer;
 
 typedef struct connection {
     thread *thread;

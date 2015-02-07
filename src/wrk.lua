@@ -5,7 +5,8 @@ local wrk = {
    method  = "GET",
    path    = "/",
    headers = {},
-   body    = nil
+   body    = nil,
+   thread  = nil,
 }
 
 function wrk.resolve(host, service)
@@ -16,6 +17,13 @@ function wrk.resolve(host, service)
       end
    end
    wrk.addrs = addrs
+end
+
+function wrk.setup(thread)
+   thread.addr = wrk.addrs[1]
+   if type(setup) == "function" then
+      setup(thread)
+   end
 end
 
 function wrk.init(args)

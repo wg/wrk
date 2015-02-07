@@ -16,7 +16,6 @@
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/uio.h>
 
