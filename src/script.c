@@ -14,6 +14,7 @@ typedef struct {
 
 static int script_addr_tostring(lua_State *);
 static int script_addr_gc(lua_State *);
+static int script_stats_call(lua_State *);
 static int script_stats_len(lua_State *);
 static int script_stats_index(lua_State *);
 static int script_thread_index(lua_State *);
@@ -30,6 +31,7 @@ static const struct luaL_reg addrlib[] = {
 };
 
 static const struct luaL_reg statslib[] = {
+    { "__call",     script_stats_call      },
     { "__index",    script_stats_index     },
     { "__len",      script_stats_len       },
     { NULL,         NULL                   }
@@ -337,27 +339,31 @@ static int script_stats_percentile(lua_State *L) {
     return 1;
 }
 
+static int script_stats_call(lua_State *L) {
+    stats *s = checkstats(L);
+    uint64_t index = lua_tonumber(L, 2);
+    uint64_t count;
+    lua_pushnumber(L, stats_value_at(s, index - 1, &count));
+    lua_pushnumber(L, count);
+    return 2;
+}
+
 static int script_stats_index(lua_State *L) {
     stats *s = checkstats(L);
-    if (lua_isnumber(L, 2)) {
-        int index = luaL_checkint(L, 2);
-        lua_pushnumber(L, s->data[index - 1]);
-    } else if (lua_isstring(L, 2)) {
-        const char *method = lua_tostring(L, 2);
-        if (!strcmp("min",   method)) lua_pushnumber(L, s->min);
-        if (!strcmp("max",   method)) lua_pushnumber(L, s->max);
-        if (!strcmp("mean",  method)) lua_pushnumber(L, stats_mean(s));
-        if (!strcmp("stdev", method)) lua_pushnumber(L, stats_stdev(s, stats_mean(s)));
-        if (!strcmp("percentile", method)) {
-            lua_pushcfunction(L, script_stats_percentile);
-        }
+    const char *method = lua_tostring(L, 2);
+    if (!strcmp("min",   method)) lua_pushnumber(L, s->min);
+    if (!strcmp("max",   method)) lua_pushnumber(L, s->max);
+    if (!strcmp("mean",  method)) lua_pushnumber(L, stats_mean(s));
+    if (!strcmp("stdev", method)) lua_pushnumber(L, stats_stdev(s, stats_mean(s)));
+    if (!strcmp("percentile", method)) {
+        lua_pushcfunction(L, script_stats_percentile);
     }
     return 1;
 }
 
 static int script_stats_len(lua_State *L) {
     stats *s = checkstats(L);
-    lua_pushinteger(L, s->limit);
+    lua_pushinteger(L, stats_popcount(s));
     return 1;
 }
 

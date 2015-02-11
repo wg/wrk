@@ -42,5 +42,5 @@ Acknowledgements
 
   wrk contains code from a number of open source projects including the
   'ae' event loop from redis, the nginx/joyent/node.js 'http-parser',
-  Mike Pall's LuaJIT, and the Tiny Mersenne Twister PRNG. Please consult
-  the NOTICE file for licensing details.
+  and Mike Pall's LuaJIT. Please consult the NOTICE file for licensing
+  details.

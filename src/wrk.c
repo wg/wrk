@@ -19,7 +19,6 @@ static struct config {
 static struct {
     stats *latency;
     stats *requests;
-    pthread_mutex_t mutex;
 } statistics;
 
 static struct sock sock = {
@@ -99,9 +98,8 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
 
-    pthread_mutex_init(&statistics.mutex, NULL);
-    statistics.latency  = stats_alloc(SAMPLES);
-    statistics.requests = stats_alloc(SAMPLES);
+    statistics.latency  = stats_alloc(cfg.timeout * 1000);
+    statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
     uint64_t stop_at = time_us() + (cfg.duration * 1000000);
@@ -117,6 +115,7 @@ int main(int argc, char **argv) {
         thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
+        t->latency     = stats_alloc(cfg.timeout * 1000);
         t->stop_at     = stop_at;
 
         t->L = script_create(cfg.script, schema, host, port, path);
@@ -207,11 +206,6 @@ int main(int argc, char **argv) {
 
 void *thread_main(void *arg) {
     thread *thread = arg;
-    aeEventLoop *loop = thread->loop;
-
-    thread->cs = zcalloc(thread->connections * sizeof(connection));
-    tinymt64_init(&thread->rand, time_us());
-    thread->latency = stats_alloc(100000);
 
     char *request = NULL;
     size_t length = 0;
@@ -220,6 +214,7 @@ void *thread_main(void *arg) {
         script_request(thread->L, &request, &length);
     }
 
+    thread->cs = zcalloc(thread->connections * sizeof(connection));
     connection *c = thread->cs;
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
@@ -230,6 +225,7 @@ void *thread_main(void *arg) {
         connect_socket(thread, c);
     }
 
+    aeEventLoop *loop = thread->loop;
     aeCreateTimeEvent(loop, CALIBRATE_DELAY_MS, calibrate, thread, NULL);
     aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
@@ -240,13 +236,9 @@ void *thread_main(void *arg) {
     zfree(thread->cs);
 
     uint64_t max = thread->latency->max;
-    stats_free(thread->latency);
-
-    pthread_mutex_lock(&statistics.mutex);
     for (uint64_t i = 0; i < thread->missed; i++) {
         stats_record(statistics.latency, max);
     }
-    pthread_mutex_unlock(&statistics.mutex);
 
     return NULL;
 }
@@ -291,18 +283,19 @@ static int reconnect_socket(thread *thread, connection *c) {
 static int calibrate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
-    (void) stats_summarize(thread->latency);
     long double latency = stats_percentile(thread->latency, 90.0) / 1000.0L;
     long double interval = MAX(latency * 2, 10);
     long double rate = (interval / latency) * thread->connections;
 
     if (latency == 0) return CALIBRATE_DELAY_MS;
 
+    stats_free(thread->latency);
+
     thread->interval = interval;
     thread->rate     = ceil(rate / 10);
     thread->start    = time_us();
     thread->requests = 0;
-    stats_reset(thread->latency);
+    thread->latency  = statistics.latency;
 
     aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
 
@@ -334,18 +327,13 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
 
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
     uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
-    uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->limit);
-    uint64_t count = thread->rate - missed;
+    uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->count);
 
-    pthread_mutex_lock(&statistics.mutex);
-    stats_sample(statistics.latency, &thread->rand, count, thread->latency);
     stats_record(statistics.requests, requests);
-    pthread_mutex_unlock(&statistics.mutex);
 
     thread->missed  += missed;
     thread->requests = 0;
     thread->start    = time_us();
-    stats_rewind(thread->latency);
 
     return thread->interval;
 }
@@ -605,7 +593,7 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     uint64_t max = stats->max;
-    long double mean  = stats_summarize(stats);
+    long double mean  = stats_mean(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);

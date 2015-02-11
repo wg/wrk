@@ -6,3 +6,5 @@ wrk next
  * Add setup phase that calls the global setup() for each thread.
  * Allow assignment to thread.addr to specify the server address.
  * Add thread:set(key, value), thread:get(key), and thread:stop().
+ * Record latency for every request instead of random samples.
+ * Latency and requests in done() are now callable, not indexable.

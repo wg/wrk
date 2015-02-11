@@ -18,8 +18,8 @@
 
 #define VERSION  "3.1.2"
 #define RECVBUF  8192
-#define SAMPLES  100000000
 
+#define MAX_THREAD_RATE_S   10000000
 #define SOCKET_TIMEOUT_MS   2000
 #define CALIBRATE_DELAY_MS  500
 #define TIMEOUT_INTERVAL_MS 2000
@@ -38,7 +38,6 @@ typedef struct {
     uint64_t rate;
     uint64_t missed;
     stats *latency;
-    tinymt64_t rand;
     lua_State *L;
     errors errors;
     struct connection *cs;

@@ -87,16 +87,16 @@ Done
   function done(summary, latency, requests)
 
   The done() function receives a table containing result data, and two
-  statistics objects representing the sampled per-request latency and
-  per-thread request rate. Duration and latency are microsecond values
-  and rate is measured in requests per second.
+  statistics objects representing the per-request latency and per-thread
+  request rate. Duration and latency are microsecond values and rate is
+  measured in requests per second.
 
   latency.min              -- minimum value seen
   latency.max              -- maximum value seen
   latency.mean             -- average value seen
   latency.stdev            -- standard deviation
   latency:percentile(99.0) -- 99th percentile value
-  latency[i]               -- raw sample value
+  latency(i)               -- raw value and count
 
   summary = {
     duration = N,  -- run duration in microseconds

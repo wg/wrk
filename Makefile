@@ -18,7 +18,7 @@ else ifeq ($(TARGET), freebsd)
 endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
-		ae.c zmalloc.c http_parser.c tinymt64.c
+		ae.c zmalloc.c http_parser.c
 BIN  := wrk
 
 ODIR := obj
