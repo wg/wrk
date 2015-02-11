@@ -102,7 +102,6 @@ int main(int argc, char **argv) {
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
 
     thread *threads = zcalloc(cfg.threads * sizeof(thread));
-    uint64_t stop_at = time_us() + (cfg.duration * 1000000);
 
     lua_State *L = script_create(cfg.script, schema, host, port, path);
     if (!script_resolve(L, host, service)) {
@@ -116,7 +115,6 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
         t->latency     = stats_alloc(cfg.timeout * 1000);
-        t->stop_at     = stop_at;
 
         t->L = script_create(cfg.script, schema, host, port, path);
         script_headers(t->L, headers);
@@ -155,6 +153,9 @@ int main(int argc, char **argv) {
     uint64_t complete = 0;
     uint64_t bytes    = 0;
     errors errors     = { 0 };
+
+    sleep(cfg.duration);
+    stop = 1;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
@@ -227,7 +228,6 @@ void *thread_main(void *arg) {
 
     aeEventLoop *loop = thread->loop;
     aeCreateTimeEvent(loop, CALIBRATE_DELAY_MS, calibrate, thread, NULL);
-    aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
 
     thread->start = time_us();
     aeMain(loop);
@@ -287,7 +287,7 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
     long double interval = MAX(latency * 2, 10);
     long double rate = (interval / latency) * thread->connections;
 
-    if (latency == 0) return CALIBRATE_DELAY_MS;
+    if (latency == 0 && !stop) return CALIBRATE_DELAY_MS;
 
     stats_free(thread->latency);
 
@@ -297,32 +297,12 @@ static int calibrate(aeEventLoop *loop, long long id, void *data) {
     thread->requests = 0;
     thread->latency  = statistics.latency;
 
-    aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
+    aeCreateTimeEvent(loop, thread->interval, record_rate, thread, NULL);
 
     return AE_NOMORE;
 }
 
-static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-    connection *c  = thread->cs;
-    uint64_t now   = time_us();
-
-    uint64_t maxAge = now - (cfg.timeout * 1000);
-
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
-        if (maxAge > c->start) {
-            thread->errors.timeout++;
-        }
-    }
-
-    if (stop || now >= thread->stop_at) {
-        aeStop(loop);
-    }
-
-    return TIMEOUT_INTERVAL_MS;
-}
-
-static int sample_rate(aeEventLoop *loop, long long id, void *data) {
+static int record_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
@@ -334,6 +314,8 @@ static int sample_rate(aeEventLoop *loop, long long id, void *data) {
     thread->missed  += missed;
     thread->requests = 0;
     thread->start    = time_us();
+
+    if (stop) aeStop(loop);
 
     return thread->interval;
 }
@@ -383,13 +365,10 @@ static int response_complete(http_parser *parser) {
         c->state = FIELD;
     }
 
-    if (now >= thread->stop_at) {
-        aeStop(thread->loop);
-        goto done;
-    }
-
     if (--c->pending == 0) {
-        stats_record(thread->latency, now - c->start);
+        if (!stats_record(thread->latency, now - c->start)) {
+            thread->errors.timeout++;
+        }
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 

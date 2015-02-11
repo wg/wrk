@@ -26,7 +26,7 @@ typedef struct {
 stats *stats_alloc(uint64_t);
 void stats_free(stats *);
 
-void stats_record(stats *, uint64_t);
+int stats_record(stats *, uint64_t);
 
 long double stats_mean(stats *);
 long double stats_stdev(stats *stats, long double);

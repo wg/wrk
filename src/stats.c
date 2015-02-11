@@ -19,14 +19,15 @@ void stats_free(stats *stats) {
     zfree(stats);
 }
 
-void stats_record(stats *stats, uint64_t n) {
-    if (n >= stats->limit) return;
+int stats_record(stats *stats, uint64_t n) {
+    if (n >= stats->limit) return 0;
     __sync_fetch_and_add(&stats->data[n], 1);
     __sync_fetch_and_add(&stats->count, 1);
     uint64_t min = stats->min;
     uint64_t max = stats->max;
     while (n < min) min = __sync_val_compare_and_swap(&stats->min, min, n);
     while (n > max) max = __sync_val_compare_and_swap(&stats->max, max, n);
+    return 1;
 }
 
 long double stats_mean(stats *stats) {

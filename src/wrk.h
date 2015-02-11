@@ -22,7 +22,6 @@
 #define MAX_THREAD_RATE_S   10000000
 #define SOCKET_TIMEOUT_MS   2000
 #define CALIBRATE_DELAY_MS  500
-#define TIMEOUT_INTERVAL_MS 2000
 
 typedef struct {
     pthread_t thread;
@@ -30,7 +29,6 @@ typedef struct {
     struct addrinfo *addr;
     uint64_t connections;
     int interval;
-    uint64_t stop_at;
     uint64_t complete;
     uint64_t requests;
     uint64_t bytes;
