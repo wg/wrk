@@ -57,30 +57,18 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-    struct http_parser_url parser_url;
-    char *url, **headers;
+    char *url, **headers = zmalloc(argc * sizeof(char *));
+    struct http_parser_url parts = {};
 
-    headers = zmalloc((argc / 2) * sizeof(char *));
-
-    if (parse_args(&cfg, &url, headers, argc, argv)) {
+    if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
         usage();
         exit(1);
     }
 
-    if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
-        fprintf(stderr, "invalid URL: %s\n", url);
-        exit(1);
-    }
-
-    char *schema  = extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *host    = extract_url_part(url, &parser_url, UF_HOST);
-    char *port    = extract_url_part(url, &parser_url, UF_PORT);
+    char *schema  = copy_url_part(url, &parts, UF_SCHEMA);
+    char *host    = copy_url_part(url, &parts, UF_HOST);
+    char *port    = copy_url_part(url, &parts, UF_PORT);
     char *service = port ? port : schema;
-    char *path    = "/";
-
-    if (parser_url.field_set & (1 << UF_PATH)) {
-        path = &url[parser_url.field_data[UF_PATH].off];
-    }
 
     if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init()) == NULL) {
@@ -100,10 +88,9 @@ int main(int argc, char **argv) {
 
     statistics.latency  = stats_alloc(cfg.timeout * 1000);
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
+    thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
-    thread *threads = zcalloc(cfg.threads * sizeof(thread));
-
-    lua_State *L = script_create(cfg.script, schema, host, port, path);
+    lua_State *L = script_create(cfg.script, url, headers);
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
@@ -116,10 +103,8 @@ int main(int argc, char **argv) {
         t->connections = cfg.connections / cfg.threads;
         t->latency     = stats_alloc(cfg.timeout * 1000);
 
-        t->L = script_create(cfg.script, schema, host, port, path);
-        script_headers(t->L, headers);
-        script_setup(L, t);
-        script_init(t->L, argc - optind, &argv[optind]);
+        t->L = script_create(cfg.script, url, headers);
+        script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
@@ -468,12 +453,12 @@ static uint64_t time_us() {
     return (t.tv_sec * 1000000) + t.tv_usec;
 }
 
-static char *extract_url_part(char *url, struct http_parser_url *parser_url, enum http_parser_url_fields field) {
+static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field) {
     char *part = NULL;
 
-    if (parser_url->field_set & (1 << field)) {
-        uint16_t off = parser_url->field_data[field].off;
-        uint16_t len = parser_url->field_data[field].len;
+    if (parts->field_set & (1 << field)) {
+        uint16_t off = parts->field_data[field].off;
+        uint16_t len = parts->field_data[field].len;
         part = zcalloc(len + 1 * sizeof(char));
         memcpy(part, &url[off], len);
     }
@@ -494,7 +479,7 @@ static struct option longopts[] = {
     { NULL,          0,                 NULL,  0  }
 };
 
-static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
+static int parse_args(struct config *cfg, char **url, struct http_parser_url *parts, char **headers, int argc, char **argv) {
     char **header = headers;
     int c;
 
@@ -541,6 +526,11 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
     }
 
     if (optind == argc || !cfg->threads || !cfg->duration) return -1;
+
+    if (!script_parse_url(argv[optind], parts)) {
+        fprintf(stderr, "invalid URL: %s\n", argv[optind]);
+        return -1;
+    }
 
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");

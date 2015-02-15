@@ -23,6 +23,8 @@ static int script_wrk_lookup(lua_State *);
 static int script_wrk_connect(lua_State *);
 
 static void set_fields(lua_State *, int index, const table_field *);
+static void set_string(lua_State *, int, char *, char *, size_t);
+static char *get_url_part(char *, struct http_parser_url *, enum http_parser_url_fields, size_t *);
 
 static const struct luaL_reg addrlib[] = {
     { "__tostring", script_addr_tostring   },
@@ -43,7 +45,7 @@ static const struct luaL_reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
-lua_State *script_create(char *file, char *scheme, char *host, char *port, char *path) {
+lua_State *script_create(char *file, char *url, char **headers) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
     (void) luaL_dostring(L, "wrk = require \"wrk\"");
@@ -55,19 +57,39 @@ lua_State *script_create(char *file, char *scheme, char *host, char *port, char 
     luaL_newmetatable(L, "wrk.thread");
     luaL_register(L, NULL, threadlib);
 
+    struct http_parser_url parts = {};
+    script_parse_url(url, &parts);
+    char *path = "/";
+    size_t len;
+
+    if (parts.field_set & (1 << UF_PATH)) {
+        path = &url[parts.field_data[UF_PATH].off];
+    }
+
     const table_field fields[] = {
-        { "scheme",  LUA_TSTRING,   scheme             },
-        { "host",    LUA_TSTRING,   host               },
-        { "port",    LUA_TSTRING,   port               },
-        { "path",    LUA_TSTRING,   path               },
         { "lookup",  LUA_TFUNCTION, script_wrk_lookup  },
         { "connect", LUA_TFUNCTION, script_wrk_connect },
+        { "path",    LUA_TSTRING,   path               },
         { NULL,      0,             NULL               },
     };
 
     lua_getglobal(L, "wrk");
+
+    set_string(L, 4, "scheme", get_url_part(url, &parts, UF_SCHEMA, &len), len);
+    set_string(L, 4, "host",   get_url_part(url, &parts, UF_HOST,   &len), len);
+    set_string(L, 4, "port",   get_url_part(url, &parts, UF_PORT,   &len), len);
     set_fields(L, 4, fields);
-    lua_pop(L, 4);
+
+    lua_getfield(L, 4, "headers");
+    for (char **h = headers; *h; h++) {
+        char *p = strchr(*h, ':');
+        if (p && p[1] == ' ') {
+            lua_pushlstring(L, *h, p - *h);
+            lua_pushstring(L, p + 2);
+            lua_settable(L, 5);
+        }
+    }
+    lua_pop(L, 5);
 
     if (file && luaL_dofile(L, file)) {
         const char *cause = lua_tostring(L, -1);
@@ -98,43 +120,26 @@ void script_push_thread(lua_State *L, thread *t) {
     lua_setmetatable(L, -2);
 }
 
-void script_setup(lua_State *L, thread *t) {
+void script_init(lua_State *L, thread *t, int argc, char **argv) {
     lua_getglobal(t->L, "wrk");
+
     script_push_thread(t->L, t);
     lua_setfield(t->L, -2, "thread");
-    lua_pop(t->L, 1);
 
     lua_getglobal(L, "wrk");
     lua_getfield(L, -1, "setup");
     script_push_thread(L, t);
     lua_call(L, 1, 0);
     lua_pop(L, 1);
-}
 
-void script_headers(lua_State *L, char **headers) {
-    lua_getglobal(L, "wrk");
-    lua_getfield(L, 1, "headers");
-    for (char **h = headers; *h; h++) {
-        char *p = strchr(*h, ':');
-        if (p && p[1] == ' ') {
-            lua_pushlstring(L, *h, p - *h);
-            lua_pushstring(L, p + 2);
-            lua_settable(L, 2);
-        }
-    }
-    lua_pop(L, 2);
-}
-
-void script_init(lua_State *L, int argc, char **argv) {
-    lua_getglobal(L, "wrk");
-    lua_getfield(L, -1, "init");
-    lua_newtable(L);
+    lua_getfield(t->L, -1, "init");
+    lua_newtable(t->L);
     for (int i = 0; i < argc; i++) {
-        lua_pushstring(L, argv[i]);
-        lua_rawseti(L, -2, i);
+        lua_pushstring(t->L, argv[i]);
+        lua_rawseti(t->L, -2, i);
     }
-    lua_call(L, 1, 0);
-    lua_pop(L, 1);
+    lua_call(t->L, 1, 0);
+    lua_pop(t->L, 1);
 }
 
 void script_request(lua_State *L, char **buf, size_t *len) {
@@ -485,6 +490,31 @@ void script_copy_value(lua_State *src, lua_State *dst, int index) {
             break;
         default:
             luaL_error(src, "cannot transfer '%s' to thread", luaL_typename(src, index));
+    }
+}
+
+int script_parse_url(char *url, struct http_parser_url *parts) {
+    if (!http_parser_parse_url(url, strlen(url), 0, parts)) {
+        if (!(parts->field_set & (1 << UF_SCHEMA))) return 0;
+        if (!(parts->field_set & (1 << UF_HOST)))   return 0;
+        return 1;
+    }
+    return 0;
+}
+
+static char *get_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field, size_t *len) {
+    char *value = NULL;
+    if (parts->field_set & (1 << field)) {
+        value = &url[parts->field_data[field].off];
+        *len  = parts->field_data[field].len;
+    }
+    return value;
+}
+
+static void set_string(lua_State *L, int index, char *field, char *value, size_t len) {
+    if (value != NULL) {
+        lua_pushlstring(L, value, len);
+        lua_setfield(L, index, field);
     }
 }
 

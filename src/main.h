@@ -45,9 +45,9 @@ static int response_body(http_parser *, const char *, size_t);
 
 static uint64_t time_us();
 
-static char *extract_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
+static int parse_args(struct config *, char **, struct http_parser_url *, char **, int, char **);
+static char *copy_url_part(char *, struct http_parser_url *, enum http_parser_url_fields);
 
-static int parse_args(struct config *, char **, char **, int, char **);
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
 static void print_stats_latency(stats *);
