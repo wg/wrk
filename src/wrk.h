@@ -21,21 +21,17 @@
 
 #define MAX_THREAD_RATE_S   10000000
 #define SOCKET_TIMEOUT_MS   2000
-#define CALIBRATE_DELAY_MS  500
+#define RECORD_INTERVAL_MS  100
 
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     struct addrinfo *addr;
     uint64_t connections;
-    int interval;
     uint64_t complete;
     uint64_t requests;
     uint64_t bytes;
     uint64_t start;
-    uint64_t rate;
-    uint64_t missed;
-    stats *latency;
     lua_State *L;
     errors errors;
     struct connection *cs;

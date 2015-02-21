@@ -30,6 +30,18 @@ int stats_record(stats *stats, uint64_t n) {
     return 1;
 }
 
+void stats_correct(stats *stats, int64_t expected) {
+    for (uint64_t n = expected * 2; n <= stats->max; n++) {
+        uint64_t count = stats->data[n];
+        int64_t m = (int64_t) n - expected;
+        while (count && m > expected) {
+            stats->data[m] += count;
+            stats->count += count;
+            m -= expected;
+        }
+    }
+}
+
 long double stats_mean(stats *stats) {
     if (stats->count == 0) return 0.0;
 

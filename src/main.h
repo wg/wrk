@@ -31,7 +31,6 @@ static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
 static int reconnect_socket(thread *, connection *);
 
-static int calibrate(aeEventLoop *, long long, void *);
 static int record_rate(aeEventLoop *, long long, void *);
 
 static void socket_connected(aeEventLoop *, int, void *, int);

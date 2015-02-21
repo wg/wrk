@@ -27,6 +27,7 @@ stats *stats_alloc(uint64_t);
 void stats_free(stats *);
 
 int stats_record(stats *, uint64_t);
+void stats_correct(stats *, int64_t);
 
 long double stats_mean(stats *);
 long double stats_stdev(stats *stats, long double);

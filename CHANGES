@@ -9,3 +9,5 @@ wrk next
  * Record latency for every request instead of random samples.
  * Latency and requests in done() are now callable, not indexable.
  * Only record timeouts when a response is actually received.
+ * Remove calibration phase and record rate at fixed interval.
+ * Improve correction of coordinated omission.

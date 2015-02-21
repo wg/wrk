@@ -101,7 +101,6 @@ int main(int argc, char **argv) {
         thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
-        t->latency     = stats_alloc(cfg.timeout * 1000);
 
         t->L = script_create(cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
@@ -161,6 +160,11 @@ int main(int argc, char **argv) {
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
 
+    if (complete / cfg.connections > 0) {
+        int64_t interval = runtime_us / (complete / cfg.connections);
+        stats_correct(statistics.latency, interval);
+    }
+
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
@@ -212,18 +216,13 @@ void *thread_main(void *arg) {
     }
 
     aeEventLoop *loop = thread->loop;
-    aeCreateTimeEvent(loop, CALIBRATE_DELAY_MS, calibrate, thread, NULL);
+    aeCreateTimeEvent(loop, RECORD_INTERVAL_MS, record_rate, thread, NULL);
 
     thread->start = time_us();
     aeMain(loop);
 
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
-
-    uint64_t max = thread->latency->max;
-    for (uint64_t i = 0; i < thread->missed; i++) {
-        stats_record(statistics.latency, max);
-    }
 
     return NULL;
 }
@@ -265,44 +264,22 @@ static int reconnect_socket(thread *thread, connection *c) {
     return connect_socket(thread, c);
 }
 
-static int calibrate(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-
-    long double latency = stats_percentile(thread->latency, 90.0) / 1000.0L;
-    long double interval = MAX(latency * 2, 10);
-    long double rate = (interval / latency) * thread->connections;
-
-    if (latency == 0 && !stop) return CALIBRATE_DELAY_MS;
-
-    stats_free(thread->latency);
-
-    thread->interval = interval;
-    thread->rate     = ceil(rate / 10);
-    thread->start    = time_us();
-    thread->requests = 0;
-    thread->latency  = statistics.latency;
-
-    aeCreateTimeEvent(loop, thread->interval, record_rate, thread, NULL);
-
-    return AE_NOMORE;
-}
-
 static int record_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
-    uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
-    uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->count);
+    if (thread->requests > 0) {
+        uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
+        uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
 
-    stats_record(statistics.requests, requests);
+        stats_record(statistics.requests, requests);
 
-    thread->missed  += missed;
-    thread->requests = 0;
-    thread->start    = time_us();
+        thread->requests = 0;
+        thread->start    = time_us();
+    }
 
     if (stop) aeStop(loop);
 
-    return thread->interval;
+    return RECORD_INTERVAL_MS;
 }
 
 static int header_field(http_parser *parser, const char *at, size_t len) {
@@ -351,7 +328,7 @@ static int response_complete(http_parser *parser) {
     }
 
     if (--c->pending == 0) {
-        if (!stats_record(thread->latency, now - c->start)) {
+        if (!stats_record(statistics.latency, now - c->start)) {
             thread->errors.timeout++;
         }
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
