@@ -2,7 +2,7 @@
 
 #include <errno.h>
 #include <unistd.h>
-#include <sys/ioctl.h
+#include <sys/ioctl.h>
 
 /* On Solaris-based platforms, FIONREAD is defined in sys/filio.h */
 #if defined (__SVR4) && defined (__sun)
