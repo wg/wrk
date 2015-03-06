@@ -190,6 +190,9 @@ int main(int argc, char **argv) {
         errors.write   += t->errors.write;
         errors.timeout += t->errors.timeout;
         errors.status  += t->errors.status;
+        errors.status_3xx  += t->errors.status_3xx;
+        errors.status_4xx  += t->errors.status_4xx;
+        errors.status_5xx  += t->errors.status_5xx;
     }
 
     uint64_t runtime_us = time_us() - start;
@@ -210,8 +213,17 @@ int main(int argc, char **argv) {
                errors.connect, errors.read, errors.write, errors.timeout);
     }
 
+    if (errors.status_3xx) {
+        printf("  3xx responses: %d\n", errors.status_3xx);
+    }
+    if (errors.status_4xx) {
+        printf("  4xx responses: %d\n", errors.status_4xx);
+    }
+    if (errors.status_5xx) {
+        printf("  5xx responses: %d\n", errors.status_4xx);
+    }
     if (errors.status) {
-        printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+        printf("  Other non-2xx responses: %d\n", errors.status);
     }
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
@@ -407,8 +419,16 @@ static int response_complete(http_parser *parser) {
     thread->complete++;
     thread->requests++;
 
-    if (status > 399) {
-        thread->errors.status++;
+    if (status >= 300) {
+        if (BETWEEN(status, 300, 399)) {
+            thread->errors.status_3xx++;
+        } else if (BETWEEN(status, 400, 499)) {
+            thread->errors.status_4xx++;
+        } else if (BETWEEN(status, 500, 599)) {
+            thread->errors.status_5xx++;
+        } else {
+            thread->errors.status++;
+        }
     }
 
     if (c->headers.buffer) {
