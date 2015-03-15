@@ -52,10 +52,10 @@ Setup
   setup() is called once for each thread and receives a userdata object
   representing the thread.
 
-    thread.addr            - get or set the thread's server address
-    thread:get(key)        - get the value of a global in the thread's env
-    thread:set(key, value) - set the value of a global in the thread's env
-    thread:stop()          - stop the thread
+    thread.addr             - get or set the thread's server address
+    thread:get(name)        - get the value of a global in the thread's env
+    thread:set(name, value) - set the value of a global in the thread's env
+    thread:stop()           - stop the thread
 
   Only boolean, nil, number, and string values or tables of the same may be
   transfered via get()/set() and thread:stop() can only be called while the

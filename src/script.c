@@ -60,7 +60,7 @@ lua_State *script_create(char *file, char *url, char **headers) {
     struct http_parser_url parts = {};
     script_parse_url(url, &parts);
     char *path = "/";
-    size_t len;
+    size_t len = 0;
 
     if (parts.field_set & (1 << UF_PATH)) {
         path = &url[parts.field_data[UF_PATH].off];
@@ -389,9 +389,9 @@ static int script_thread_get(lua_State *L) {
 
 static int script_thread_set(lua_State *L) {
     thread *t = checkthread(L);
-    const char *key = lua_tostring(L, -2);
+    const char *name = lua_tostring(L, -2);
     script_copy_value(L, t->L, -1);
-    lua_setglobal(t->L, key);
+    lua_setglobal(t->L, name);
     return 0;
 }
 
