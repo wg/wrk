@@ -75,9 +75,12 @@ lua_State *script_create(char *file, char *url, char **headers) {
 
     lua_getglobal(L, "wrk");
 
-    set_string(L, 4, "scheme", get_url_part(url, &parts, UF_SCHEMA, &len), len);
-    set_string(L, 4, "host",   get_url_part(url, &parts, UF_HOST,   &len), len);
-    set_string(L, 4, "port",   get_url_part(url, &parts, UF_PORT,   &len), len);
+    char *v = get_url_part(url, &parts, UF_SCHEMA,   &len);
+    set_string(L, 4, "scheme", v, len);
+    v = get_url_part(url, &parts, UF_HOST,   &len);
+    set_string(L, 4, "host", v, len);
+    v = get_url_part(url, &parts, UF_PORT,   &len);
+    set_string(L, 4, "port",   v, len);
     set_fields(L, 4, fields);
 
     lua_getfield(L, 4, "headers");
