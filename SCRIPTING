@@ -38,6 +38,7 @@ Overview
 
     global setup    -- called during thread setup
     global init     -- called when the thread is starting
+    global delay    -- called to get the request delay
     global request  -- called to generate the HTTP request
     global response -- called with HTTP response data
     global done     -- called with results of run
@@ -64,6 +65,7 @@ Setup
 Running
 
   function init(args)
+  function delay()
   function request()
   function response(status, headers, body)
 
@@ -72,6 +74,9 @@ Running
 
   The init() function receives any extra command line arguments for the
   script which must be separated from wrk arguments with "--".
+
+  delay() returns the number of milliseconds to delay sending the next
+  request.
 
   request() returns a string containing the HTTP request. Building a new
   request each time is expensive, when testing a high performance server

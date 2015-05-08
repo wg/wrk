@@ -5,13 +5,14 @@
 #include "main.h"
 
 static struct config {
-    uint64_t threads;
     uint64_t connections;
     uint64_t duration;
+    uint64_t threads;
     uint64_t timeout;
     uint64_t pipeline;
-    bool     latency;
+    bool     delay;
     bool     dynamic;
+    bool     latency;
     char    *script;
     SSL_CTX *ctx;
 } cfg;
@@ -107,7 +108,8 @@ int main(int argc, char **argv) {
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
-            cfg.dynamic = !script_is_static(t->L);
+            cfg.dynamic  = !script_is_static(t->L);
+            cfg.delay    = script_has_delay(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;
                 parser_settings.on_header_value = header_value;
@@ -212,6 +214,7 @@ void *thread_main(void *arg) {
         c->ssl     = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request = request;
         c->length  = length;
+        c->delayed = cfg.delay;
         connect_socket(thread, c);
     }
 
@@ -282,6 +285,13 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
     return RECORD_INTERVAL_MS;
 }
 
+static int delay_request(aeEventLoop *loop, long long id, void *data) {
+    connection *c = data;
+    c->delayed = false;
+    aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    return AE_NOMORE;
+}
+
 static int header_field(http_parser *parser, const char *at, size_t len) {
     connection *c = parser->data;
     if (c->state == VALUE) {
@@ -331,6 +341,7 @@ static int response_complete(http_parser *parser) {
         if (!stats_record(statistics.latency, now - c->start)) {
             thread->errors.timeout++;
         }
+        c->delayed = cfg.delay;
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 
@@ -370,6 +381,13 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
+
+    if (c->delayed) {
+        uint64_t delay = script_delay(thread->L);
+        aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+        aeCreateTimeEvent(loop, delay, delay_request, c, NULL);
+        return;
+    }
 
     if (!c->written) {
         if (cfg.dynamic) {

@@ -1,3 +1,5 @@
+ * delay() can return milliseconds to delay sending next request.
+
 wrk 4.0.0
 
  * The wrk global variable is the only global defined by default.

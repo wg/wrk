@@ -141,6 +141,14 @@ void script_init(lua_State *L, thread *t, int argc, char **argv) {
     lua_pop(t->L, 1);
 }
 
+uint64_t script_delay(lua_State *L) {
+    lua_getglobal(L, "delay");
+    lua_call(L, 0, 1);
+    uint64_t delay = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+    return delay;
+}
+
 void script_request(lua_State *L, char **buf, size_t *len) {
     int pop = 1;
     lua_getglobal(L, "request");
@@ -187,6 +195,10 @@ bool script_is_static(lua_State *L) {
 
 bool script_want_response(lua_State *L) {
     return script_is_function(L, "response");
+}
+
+bool script_has_delay(lua_State *L) {
+    return script_is_function(L, "delay");
 }
 
 bool script_has_done(lua_State *L) {
