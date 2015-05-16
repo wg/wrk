@@ -1,6 +1,6 @@
 /*
 ** Auxiliary library for the Lua/C API.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major parts taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -302,7 +302,7 @@ static int panic(lua_State *L)
 
 #ifdef LUAJIT_USE_SYSMALLOC
 
-#if LJ_64
+#if LJ_64 && !defined(LUAJIT_USE_VALGRIND)
 #error "Must use builtin allocator for 64 bit target"
 #endif
 

@@ -1,6 +1,6 @@
 /*
 ** String scanning.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include <math.h>
@@ -199,7 +199,7 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
       *xip++ = d + ((*p != '.' ? *p : *++p) & 15); p++;
     }
     /* Scan and realign trailing digit. */
-    if (i) *xip++ = 10 * ((*p != '.' ? *p : *++p) & 15), ex10--, p++;
+    if (i) *xip++ = 10 * ((*p != '.' ? *p : *++p) & 15), ex10--, dig++, p++;
 
     /* Summarize rounding-effect of excess digits. */
     if (dig > STRSCAN_MAXDIG) {
@@ -289,14 +289,15 @@ static StrScanFmt strscan_dec(const uint8_t *p, TValue *o,
 
     /* Scale down until no more than 17 or 18 integer part digits remain. */
     while (idig > 9) {
-      uint32_t i, cy = 0;
+      uint32_t i = hi, cy = 0;
       ex2 += 6;
-      for (i = hi; i != lo; i = DNEXT(i)) {
+      do {
 	cy += xi[i];
 	xi[i] = (cy >> 6);
 	cy = 100 * (cy & 0x3f);
 	if (xi[i] == 0 && i == hi) hi = DNEXT(hi), idig--;
-      }
+	i = DNEXT(i);
+      } while (i != lo);
       while (cy) {
 	if (hi == lo) { xi[DPREV(lo)] |= 1; break; }
 	xi[lo] = (cy >> 6); lo = DNEXT(lo);

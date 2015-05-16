@@ -1,6 +1,6 @@
 /*
 ** x86/x64 IR assembler (SSA IR -> machine code).
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 /* -- Guard handling ------------------------------------------------------ */
@@ -325,6 +325,14 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       as->mrm.base = as->mrm.idx = RID_NONE;
       return RID_MRM;
     }
+  } else if (ir->o == IR_KINT64) {
+    RegSet avail = as->freeset & ~as->modset & RSET_GPR;
+    lua_assert(allow != RSET_EMPTY);
+    if (!(avail & (avail-1))) {  /* Fuse if less than two regs available. */
+      as->mrm.ofs = ptr2addr(ir_kint64(ir));
+      as->mrm.base = as->mrm.idx = RID_NONE;
+      return RID_MRM;
+    }
   } else if (mayfuse(as, ref)) {
     RegSet xallow = (allow & RSET_GPR) ? allow : RSET_GPR;
     if (ir->o == IR_SLOAD) {
@@ -361,7 +369,7 @@ static Reg asm_fuseload(ASMState *as, IRRef ref, RegSet allow)
       return RID_MRM;
     }
   }
-  if (!(as->freeset & allow) &&
+  if (!(as->freeset & allow) && !irref_isk(ref) &&
       (allow == RSET_EMPTY || ra_hasspill(ir->s) || iscrossref(as, ref)))
     goto fusespill;
   return ra_allocref(as, ref, allow);
@@ -571,7 +579,7 @@ static void asm_setupresult(ASMState *as, IRIns *ir, const CCallInfo *ci)
       lua_assert(!irt_ispri(ir->t));
       ra_destreg(as, ir, RID_RET);
     }
-  } else if (LJ_32 && irt_isfp(ir->t)) {
+  } else if (LJ_32 && irt_isfp(ir->t) && !(ci->flags & CCI_CASTU64)) {
     emit_x87op(as, XI_FPOP);  /* Pop unused result from x87 st0. */
   }
 }
@@ -1828,8 +1836,12 @@ static void asm_intarith(ASMState *as, IRIns *ir, x86Arith xa)
   Reg dest, right;
   int32_t k = 0;
   if (as->flagmcp == as->mcp) {  /* Drop test r,r instruction. */
-    as->flagmcp = NULL;
-    as->mcp += (LJ_64 && *as->mcp < XI_TESTb) ? 3 : 2;
+    MCode *p = as->mcp + ((LJ_64 && *as->mcp < XI_TESTb) ? 3 : 2);
+    if ((p[1] & 15) < 14) {
+      if ((p[1] & 15) >= 12) p[1] -= 4;  /* L <->S, NL <-> NS */
+      as->flagmcp = NULL;
+      as->mcp = p;
+    }  /* else: cannot transform LE/NLE to cc without use of OF. */
   }
   right = IR(rref)->r;
   if (ra_hasreg(right)) {

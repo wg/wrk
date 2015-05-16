@@ -1,6 +1,6 @@
 /*
 ** FFI library.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lib_ffi_c
@@ -136,6 +136,7 @@ static int ffi_index_meta(lua_State *L, CTState *cts, CType *ct, MMS mm)
 	return 0;
       }
     }
+    copyTV(L, base, L->top);
     tv = L->top-1;
   }
   return lj_meta_tailcall(L, tv);

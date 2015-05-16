@@ -1,6 +1,6 @@
 /*
 ** LuaJIT common internal definitions.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_DEF_H
@@ -111,7 +111,7 @@ typedef uintptr_t BloomFilter;
 #define bloomset(b, x)	((b) |= bloombit((x)))
 #define bloomtest(b, x)	((b) & bloombit((x)))
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__psp2__)
 
 #define LJ_NORET	__attribute__((noreturn))
 #define LJ_ALIGN(n)	__attribute__((aligned(n)))
@@ -119,7 +119,7 @@ typedef uintptr_t BloomFilter;
 #define LJ_AINLINE	inline __attribute__((always_inline))
 #define LJ_NOINLINE	__attribute__((noinline))
 
-#if defined(__ELF__) || defined(__MACH__)
+#if defined(__ELF__) || defined(__MACH__) || defined(__psp2__)
 #if !((defined(__sun__) && defined(__svr4__)) || defined(__CELLOS_LV2__))
 #define LJ_NOAPI	extern __attribute__((visibility("hidden")))
 #endif
@@ -150,6 +150,9 @@ static LJ_AINLINE uint32_t lj_fls(uint32_t x)
 #if defined(__arm__)
 static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
 {
+#if defined(__psp2__)
+  return __builtin_rev(x);
+#else
   uint32_t r;
 #if __ARM_ARCH_6__ || __ARM_ARCH_6J__ || __ARM_ARCH_6T2__ || __ARM_ARCH_6Z__ ||\
     __ARM_ARCH_6ZK__ || __ARM_ARCH_7__ || __ARM_ARCH_7A__ || __ARM_ARCH_7R__
@@ -162,6 +165,7 @@ static LJ_AINLINE uint32_t lj_bswap(uint32_t x)
   __asm__("eor %0, %1, %1, ror #16" : "=r" (r) : "r" (x));
 #endif
   return ((r & 0xff00ffffu) >> 8) ^ lj_ror(x, 8);
+#endif
 #endif
 }
 

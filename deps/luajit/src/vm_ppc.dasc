@@ -1,6 +1,6 @@
 |// Low-level VM code for PowerPC CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 |
 |.arch ppc
 |.section code_op, code_sub
@@ -72,6 +72,29 @@
 |  cmpwi y, 0
 |.else
 |  andi. y, a, i
+|.endif
+|.endmacro
+|
+|.macro clrso, reg
+|.if PPE
+|  li reg, 0
+|  mtxer reg
+|.else
+|  mcrxr cr0
+|.endif
+|.endmacro
+|
+|.macro checkov, reg, noov
+|.if PPE
+|  mfxer reg
+|  add reg, reg, reg
+|  cmpwi reg, 0
+|   li reg, 0
+|   mtxer reg
+|  bgey noov
+|.else
+|  mcrxr cr0
+|  bley noov
 |.endif
 |.endmacro
 |
@@ -563,7 +586,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  stp BASE, L->top			// Save current top held in BASE (yes).
   |   mr SAVE0, RD
-  |  mr CARG2, TMP2
+  |  srwi CARG2, TMP2, 3
   |  mr CARG1, L
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |    lwz TMP2, SAVE_NRES
@@ -2587,7 +2610,7 @@ static void build_subroutines(BuildCtx *ctx)
   |    stw CARG2, DISPATCH_GL(vmstate)(DISPATCH)
   |  savex_ 0,1,2,3
   |   stw CARG1, 0(sp)			// Store extended stack chain.
-  |   mcrxr cr0				// Clear SO flag.
+  |   clrso TMP1
   |  savex_ 4,5,6,7
   |   addi CARG2, sp, 16+32*8+32*4	// Recompute original value of sp.
   |  savex_ 8,9,10,11
@@ -2706,7 +2729,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  cmpwi CARG2, 0
   |   li CARG1, 0
   |  beqlr
-  |  mcrxr cr0			// Clear SO for -2147483648 % -1 and return 0.
+  |  clrso TMP0			// Clear SO for -2147483648 % -1 and return 0.
   |  blr
   |
   |//-----------------------------------------------------------------------
@@ -3309,7 +3332,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |4:
     |.if not GPR64
     |  // Potential overflow.
-    |  mcrxr cr0; bley <1		// Ignore unrelated overflow.
+    |  checkov TMP1, <1			// Ignore unrelated overflow.
     |.endif
     |  lus TMP1, 0x41e0			// 2^31.
     |  li TMP0, 0
@@ -3494,7 +3517,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |2:
     |  ins_next2
     |4:  // Overflow.
-    |  mcrxr cr0; bley <1		// Ignore unrelated overflow.
+    |  checkov TMP0, <1			// Ignore unrelated overflow.
     |  ins_arithfallback b
     |5:  // FP variant.
     ||if (vk == 1) {
@@ -4692,7 +4715,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  b <1
     if (vk) {
       |6:  // Potential overflow.
-      |  mcrxr cr0; bley <4		// Ignore unrelated overflow.
+      |  checkov TMP0, <4		// Ignore unrelated overflow.
       |  b <2
     }
     |.endif
@@ -4832,7 +4855,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  // Traces on PPC don't store the trace number, so use 0.
     |   stw ZERO, DISPATCH_GL(vmstate)(DISPATCH)
     |  lwzx TRACE:TMP2, TMP1, RD
-    |  mcrxr cr0			// Clear SO flag.
+    |  clrso TMP1
     |  lp TMP2, TRACE:TMP2->mcode
     |   stw BASE, DISPATCH_GL(jit_base)(DISPATCH)
     |  mtctr TMP2

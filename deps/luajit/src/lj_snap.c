@@ -1,6 +1,6 @@
 /*
 ** Snapshot handling.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_snap_c
@@ -104,8 +104,6 @@ static BCReg snapshot_framelinks(jit_State *J, SnapEntry *map)
     if (frame_islua(frame)) {
       map[f++] = SNAP_MKPC(frame_pc(frame));
       frame = frame_prevl(frame);
-      if (frame + funcproto(frame_func(frame))->framesize > ftop)
-	ftop = frame + funcproto(frame_func(frame))->framesize;
     } else if (frame_iscont(frame)) {
       map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
       map[f++] = SNAP_MKPC(frame_contpc(frame));
@@ -114,7 +112,10 @@ static BCReg snapshot_framelinks(jit_State *J, SnapEntry *map)
       lua_assert(!frame_isc(frame));
       map[f++] = SNAP_MKFTSZ(frame_ftsz(frame));
       frame = frame_prevd(frame);
+      continue;
     }
+    if (frame + funcproto(frame_func(frame))->framesize > ftop)
+      ftop = frame + funcproto(frame_func(frame))->framesize;
   }
   lua_assert(f == (MSize)(1 + J->framedepth));
   return (BCReg)(ftop - lim);

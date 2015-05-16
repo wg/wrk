@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT module to save/list bytecode.
 --
--- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2015 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -11,7 +11,7 @@
 ------------------------------------------------------------------------------
 
 local jit = require("jit")
-assert(jit.version_num == 20003, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20004, "LuaJIT core/library version mismatch")
 local bit = require("bit")
 
 -- Symbol name prefix for LuaJIT bytecode.
@@ -69,7 +69,7 @@ local map_arch = {
 
 local map_os = {
   linux = true, windows = true, osx = true, freebsd = true, netbsd = true,
-  openbsd = true, solaris = true,
+  openbsd = true, dragonfly = true, solaris = true,
 }
 
 local function checkarg(str, map, err)

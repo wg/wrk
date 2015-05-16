@@ -4,7 +4,7 @@
 <title>Installation</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <meta name="Author" content="Mike Pall">
-<meta name="Copyright" content="Copyright (C) 2005-2014, Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2015, Mike Pall">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
@@ -127,7 +127,7 @@ operating systems, CPUs and compilers:
 <tr class="odd">
 <td class="compatcpu"><a href="#cross2">ARMv5+<br>ARM9E+</a></td>
 <td class="compatos">GCC 4.2+</td>
-<td class="compatos">GCC 4.2+</td>
+<td class="compatos">GCC 4.2+<br>PSP2 (<a href="#psvita">PS VITA</a>)</td>
 <td class="compatos">GCC 4.2+</td>
 <td class="compatos compatno">&nbsp;</td>
 </tr>
@@ -188,8 +188,8 @@ open a terminal window and change to this directory. Now unpack the archive
 and change to the newly created directory:
 </p>
 <pre class="code">
-tar zxf LuaJIT-2.0.3.tar.gz
-cd LuaJIT-2.0.3</pre>
+tar zxf LuaJIT-2.0.4.tar.gz
+cd LuaJIT-2.0.4</pre>
 <h3>Building LuaJIT</h3>
 <p>
 The supplied Makefiles try to auto-detect the settings needed for your
@@ -458,41 +458,56 @@ ISDKF="-arch armv7 -isysroot $ISDK/SDKs/$ISDKVER"
 make HOST_CC="gcc -m32 -arch i386" CROSS=$ISDKP TARGET_FLAGS="$ISDKF" \
      TARGET_SYS=iOS
 </pre>
+
+<h3 id="consoles">Cross-compiling for consoles</h3>
 <p>
-You can cross-compile for <b id="ps3">PS3</b> using the PS3&nbsp;SDK from
-a Linux host or a Windows host (requires 32&nbsp;bit MinGW (GCC) on the host,
-too). Due to restrictions on consoles, the JIT compiler is disabled and
-only the fast interpreter is built:
+Building LuaJIT for consoles requires both a supported host compiler
+(x86 or x64) and a cross-compiler (to PPC or ARM) from the official
+console SDK.
+</p>
+<p>
+Due to restrictions on consoles, the JIT compiler is disabled and only
+the fast interpreter is built. This is still faster than plain Lua,
+but much slower than the JIT compiler. The FFI is disabled, too, since
+it's not very useful in such an environment.
+</p>
+<p>
+The following commands build a static library <tt>libluajit.a</tt>,
+which can be linked against your game, just like the Lua library.
+</p>
+<p>
+To cross-compile for <b id="ps3">PS3</b> from a Linux host (requires
+32&nbsp;bit GCC, i.e. multilib Linux/x64) or a Windows host (requires
+32&nbsp;bit MinGW), run this command:
 </p>
 <pre class="code">
 make HOST_CC="gcc -m32" CROSS=ppu-lv2-
 </pre>
 <p>
-You can cross-compile for <b id="ps4">PS4</b> from a Windows host using
-the PS4&nbsp;SDK (ORBIS) plus 64&nbsp;bit MSVC. Due to restrictions on
-consoles, the JIT compiler is disabled and only the fast interpreter
-is built.
-</p>
-<p>
-Open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
-<tt>cd</tt> to the directory where you've unpacked the sources and run
-the following commands. This builds a static library <tt>libluajit.a</tt>,
-which can be linked against your game, just like the Lua library.
+To cross-compile for <b id="ps4">PS4</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (64&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and
+run the following commands:
 </p>
 <pre class="code">
 cd src
 ps4build
 </pre>
 <p>
-You can cross-compile for <b id="xbox360">Xbox 360</b> using the
-Xbox&nbsp;360 SDK (MSVC + XEDK). Due to restrictions on consoles, the
-JIT compiler is disabled and only the fast interpreter is built.
+To cross-compile for <b id="psvita">PS Vita</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (32&nbsp;bit host compiler),
+<tt>cd</tt> to the directory where you've unpacked the sources and
+run the following commands:
 </p>
+<pre class="code">
+cd src
+psvitabuild
+</pre>
 <p>
-Open a "Visual Studio .NET Command Prompt" (32&nbsp;bit host compiler),
+To cross-compile for <b id="xbox360">Xbox 360</b> from a Windows host,
+open a "Visual Studio .NET Command Prompt" (32&nbsp;bit host compiler),
 <tt>cd</tt> to the directory where you've unpacked the sources and run
-the following commands. This builds a static library <tt>luajit20.lib</tt>,
-which can be linked against your game, just like the Lua library.
+the following commands:
 </p>
 <pre class="code">
 cd src
@@ -621,7 +636,7 @@ to me (the upstream) and not you (the package maintainer), anyway.
 </div>
 <div id="foot">
 <hr class="hide">
-Copyright &copy; 2005-2014 Mike Pall
+Copyright &copy; 2005-2015 Mike Pall
 <span class="noprint">
 &middot;
 <a href="contact.html">Contact</a>
