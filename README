@@ -1,3 +1,7 @@
+compile
+  
+  Afther download the scripts,then use 'make` command to build it.
+
 wrk - a HTTP benchmarking tool
 
   wrk is a modern HTTP benchmarking tool capable of generating significant
