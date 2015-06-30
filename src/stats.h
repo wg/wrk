@@ -14,6 +14,7 @@ typedef struct {
     uint32_t status;
     uint32_t timeout;
     uint32_t reset;
+    uint32_t errcode[2048];
 } errors;
 
 typedef struct {
