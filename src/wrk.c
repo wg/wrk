@@ -405,7 +405,23 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     switch (sock.write(c, buf, len, &n)) {
         case OK:    break;
         case ERROR: goto error;
-        case RETRY: return;
+        case RETRY: {
+         	socklen_t err_len = sizeof(int);
+          	int errsv;
+
+            if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
+            	fprintf(stderr, "error");
+            	exit(-1);
+            } else {
+            	if (errsv == ECONNRESET) {
+            		thread->errors.reset++;
+            		thread->errors.write--;
+            	}
+            	fprintf(stderr, "%d", errsv);
+            }
+
+        	return;
+        }
     }
 
     c->written += n;
@@ -418,7 +434,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   error:
   {
-  	socklen_t err_len = sizeof(int);
+	socklen_t err_len = sizeof(int);
   	int errsv;
 
     if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
@@ -429,7 +445,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     		thread->errors.reset++;
     		thread->errors.write--;
     	}
-    	fprintf(stderr, "%d", errsv);
     }
   }
     thread->errors.write++;
@@ -445,7 +460,21 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
         switch (sock.read(c, &n)) {
             case OK:    break;
             case ERROR: goto error;
-            case RETRY: return;
+            case RETRY: {
+            	socklen_t err_len = sizeof(int);
+              	int errsv;
+
+                if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
+                	fprintf(stderr, "error");
+                	exit(-1);
+                } else {
+                	if (errsv == ECONNRESET) {
+                		c->thread->errors.reset++;
+                		c->thread->errors.read--;
+                	}
+                }
+            	return;
+            }
         }
 
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
@@ -456,7 +485,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   error:
   {
-  	socklen_t err_len = sizeof(int);
+	socklen_t err_len = sizeof(int);
   	int errsv;
 
     if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
@@ -467,7 +496,6 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     		c->thread->errors.reset++;
     		c->thread->errors.read--;
     	}
-    	fprintf(stderr, "%d", errsv);
     }
   }
     c->thread->errors.read++;
