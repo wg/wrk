@@ -427,8 +427,9 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     } else {
     	if (errsv == ECONNRESET) {
     		thread->errors.reset++;
+    		thread->errors.write--;
     	}
-    	thread->errors.write--;
+
     }
   }
     thread->errors.write++;
@@ -464,8 +465,8 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     } else {
     	if (errsv == ECONNRESET) {
     		c->thread->errors.reset++;
+    		c->thread->errors.read--;
     	}
-    	c->thread->errors.read--;
     }
   }
     c->thread->errors.read++;
