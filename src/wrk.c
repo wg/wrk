@@ -155,6 +155,7 @@ int main(int argc, char **argv) {
         errors.write   += t->errors.write;
         errors.timeout += t->errors.timeout;
         errors.status  += t->errors.status;
+        errors.reset   += t->errors.reset;
     }
 
     uint64_t runtime_us = time_us() - start;
@@ -175,9 +176,9 @@ int main(int argc, char **argv) {
     char *runtime_msg = format_time_us(runtime_us);
 
     printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
-    if (errors.connect || errors.read || errors.write || errors.timeout) {
-        printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
-               errors.connect, errors.read, errors.write, errors.timeout);
+    if (errors.connect || errors.read || errors.write || errors.timeout || errors.reset) {
+        printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n reset %d\n",
+               errors.connect, errors.read, errors.write, errors.timeout, errors.reset);
     }
 
     if (errors.status) {
@@ -416,8 +417,23 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     return;
 
   error:
+  {
+  	socklen_t err_len = sizeof(int);
+  	int errsv;
+
+    if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
+    	fprintf(stderr, "error");
+    	exit(-1);
+    } else {
+    	if (errsv == ECONNRESET) {
+    		thread->errors.reset++;
+    	}
+    	thread->errors.write--;
+    }
+  }
     thread->errors.write++;
     reconnect_socket(thread, c);
+
 }
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
@@ -438,6 +454,20 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     return;
 
   error:
+  {
+  	socklen_t err_len = sizeof(int);
+  	int errsv;
+
+    if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &errsv, &err_len)) {
+    	fprintf(stderr, "error");
+    	exit(-1);
+    } else {
+    	if (errsv == ECONNRESET) {
+    		c->thread->errors.reset++;
+    	}
+    	c->thread->errors.read--;
+    }
+  }
     c->thread->errors.read++;
     reconnect_socket(c->thread, c);
 }

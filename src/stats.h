@@ -13,6 +13,7 @@ typedef struct {
     uint32_t write;
     uint32_t status;
     uint32_t timeout;
+    uint32_t reset;
 } errors;
 
 typedef struct {
