@@ -429,7 +429,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     		thread->errors.reset++;
     		thread->errors.write--;
     	}
-    	thread->errors.errcode[errsv]++;
+    	fprintf(stderr, "%d", errsv);
     }
   }
     thread->errors.write++;
@@ -467,7 +467,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     		c->thread->errors.reset++;
     		c->thread->errors.read--;
     	}
-    	c->thread->errors.errcode[errsv]++;
+    	fprintf(stderr, "%d", errsv);
     }
   }
     c->thread->errors.read++;
