@@ -44,3 +44,6 @@ Acknowledgements
   'ae' event loop from redis, the nginx/joyent/node.js 'http-parser',
   and Mike Pall's LuaJIT. Please consult the NOTICE file for licensing
   details.
+
+If you want to learn more, please visit this tutorial: https://www.digitalocean.com/community/tutorials/how-to-benchmark-http-latency-with-wrk-on-ubuntu-14-04
+For a more advanced example and debugging tips visit this blog post: http://czerasz.com/2015/07/19/wrk-http-benchmarking-tool-example/
