@@ -35,13 +35,19 @@
 #include "config.h"
 #include "zmalloc.h"
 
+#ifdef _LP64
+#define ALIGMENT (16)
+#else
+#define ALIGMENT (8)
+#endif
+#define ROUND_UP(n,r) (((n + r - 1) / r ) * r)
 #ifdef HAVE_MALLOC_SIZE
 #define PREFIX_SIZE (0)
 #else
 #if defined(__sun) || defined(__sparc) || defined(__sparc__)
-#define PREFIX_SIZE (sizeof(long long))
+#define PREFIX_SIZE (ROUND_UP(sizeof(long long), ALIGMENT))
 #else
-#define PREFIX_SIZE (sizeof(size_t))
+#define PREFIX_SIZE (ROUND_UP(sizeof(size_t), ALIGMENT))
 #endif
 #endif
 
