@@ -15,6 +15,9 @@ else ifeq ($(TARGET), linux)
 else ifeq ($(TARGET), freebsd)
 	CFLAGS  += -D_DECLARE_C99_LDBL_MATH
 	LDFLAGS += -Wl,-E
+else ifeq ($(TARGET), dragonfly)
+	CFLAGS  += -D_DECLARE_C99_LDBL_MATH
+	LDFLAGS += -Wl,-E
 endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
