@@ -14,4 +14,23 @@
 #include <sys/time.h>
 #endif
 
+#include <stdint.h>
+#include <stdbool.h>
+
+#include <openssl/ssl.h>
+
+
+struct config {
+    uint64_t connections;
+    uint64_t duration;
+    uint64_t threads;
+    uint64_t timeout;
+    uint64_t pipeline;
+    bool     delay;
+    bool     dynamic;
+    bool     latency;
+    char    *script;
+    SSL_CTX *ctx;
+};
+
 #endif /* CONFIG_H */

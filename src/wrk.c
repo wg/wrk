@@ -3,19 +3,9 @@
 #include "wrk.h"
 #include "script.h"
 #include "main.h"
+#include "config.h"
 
-static struct config {
-    uint64_t connections;
-    uint64_t duration;
-    uint64_t threads;
-    uint64_t timeout;
-    uint64_t pipeline;
-    bool     delay;
-    bool     dynamic;
-    bool     latency;
-    char    *script;
-    SSL_CTX *ctx;
-} cfg;
+static struct config cfg;
 
 static struct {
     stats *latency;
