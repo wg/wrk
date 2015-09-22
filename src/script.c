@@ -45,10 +45,17 @@ static const struct luaL_reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
-lua_State *script_create(char *file, char *url, char **headers) {
+lua_State *script_create(char *file, char *url, char **headers,
+    bool load_wrk) {
+
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
-    (void) luaL_dostring(L, "wrk = require \"wrk\"");
+
+    if (load_wrk) {
+        (void) luaL_dostring(L, "wrk = require \"wrk\"");
+    } else {
+        (void) luaL_dostring(L, "wrk = {}");
+    }
 
     luaL_newmetatable(L, "wrk.addr");
     luaL_register(L, NULL, addrlib);

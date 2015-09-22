@@ -9,7 +9,14 @@
 #include "stats.h"
 #include "wrk.h"
 
-lua_State *script_create(char *, char *, char **);
+/**
+ * Create new lua virtual machine setup with wrk test variables.
+ *
+ * @param load_wrk if true "wrk.lua" is imported from created lua VM. This
+ *	is undesired behavior during tests.
+ * @return pointer to created lua VM on success. NULL on error.
+ */
+lua_State *script_create(char *, char *, char **, bool load_wrk);
 
 bool script_resolve(lua_State *, char *, char *);
 void script_setup(lua_State *, thread *);
