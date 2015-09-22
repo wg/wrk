@@ -18,7 +18,7 @@ else ifeq ($(TARGET), freebsd)
 endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
-		ae.c zmalloc.c http_parser.c cli_options.c config.c
+		ae.c zmalloc.c http_parser.c cli_options.c config.c base64.c
 SRC_FILES := $(addprefix src/, $(filter-out wrk.c, $(SRC)) )
 
 TEST_FILES := $(shell find tests -name 'test_*.c')
