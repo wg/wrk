@@ -61,3 +61,16 @@ done:
 
 	return retval;
 }
+
+void
+http_append_header(char** headers, char* header)
+{
+	while (*headers != NULL) {
+		++headers;
+	}
+
+	*headers = header;
+
+	++headers;
+	*headers = NULL;
+}
