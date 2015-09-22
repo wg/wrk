@@ -46,7 +46,7 @@ static const struct luaL_reg threadlib[] = {
 };
 
 lua_State *script_create(char *file, char *url, char **headers,
-    bool load_wrk) {
+    bool load_wrk, bool proxy_set) {
 
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
@@ -66,9 +66,11 @@ lua_State *script_create(char *file, char *url, char **headers,
 
     struct http_parser_url parts = {};
     script_parse_url(url, &parts);
-    char *path = "/";
 
-    if (parts.field_set & (1 << UF_PATH)) {
+    char *path = "/";
+    if (proxy_set) {
+        path = url;
+    } else if (parts.field_set & (1 << UF_PATH)) {
         path = &url[parts.field_data[UF_PATH].off];
     }
 
