@@ -30,6 +30,10 @@ struct config {
     bool     dynamic;
     bool     latency;
     char    *script;
+    char     proxy_addr[256];
+    char     proxy_port[16];
+    char     proxy_username[256];
+    char     proxy_user_password[256];
     SSL_CTX *ctx;
 };
 
