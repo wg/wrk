@@ -1,6 +1,6 @@
 /*
 ** C type conversions.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #include "lj_obj.h"
@@ -702,6 +702,7 @@ static void cconv_substruct_init(CTState *cts, CType *d, uint8_t *dp,
     } else if (ctype_isxattrib(df->info, CTA_SUBTYPE)) {
       cconv_substruct_init(cts, ctype_rawchild(cts, df),
 			   dp+df->size, o, len, ip);
+      if ((d->info & CTF_UNION)) break;
     }  /* Ignore all other entries in the chain. */
   }
 }

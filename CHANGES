@@ -1,0 +1,15 @@
+ * delay() can return milliseconds to delay sending next request.
+
+wrk 4.0.0
+
+ * The wrk global variable is the only global defined by default.
+ * wrk.init() calls the global init(), remove calls to wrk.init().
+ * Add wrk.lookup(host, port) and wrk.connect(addr) functions.
+ * Add setup phase that calls the global setup() for each thread.
+ * Allow assignment to thread.addr to specify the server address.
+ * Add thread:set(name, value), thread:get(name), and thread:stop().
+ * Record latency for every request instead of random samples.
+ * Latency and requests in done() are now callable, not indexable.
+ * Only record timeouts when a response is actually received.
+ * Remove calibration phase and record rate at fixed interval.
+ * Improve correction of coordinated omission.

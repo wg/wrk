@@ -1,6 +1,6 @@
 /*
 ** Machine code management.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_mcode_c
@@ -145,7 +145,7 @@ static void mcode_free(jit_State *J, void *p, size_t sz)
 
 /* -- MCode area protection ----------------------------------------------- */
 
-/* Define this ONLY if the page protection twiddling becomes a bottleneck. */
+/* Define this ONLY if page protection twiddling becomes a bottleneck. */
 #ifdef LUAJIT_UNPROTECT_MCODE
 
 /* It's generally considered to be a potential security risk to have
@@ -252,7 +252,20 @@ static void *mcode_alloc(jit_State *J, size_t sz)
 #else
 
 /* All memory addresses are reachable by relative jumps. */
-#define mcode_alloc(J, sz)	mcode_alloc_at((J), 0, (sz), MCPROT_GEN)
+static void *mcode_alloc(jit_State *J, size_t sz)
+{
+#ifdef __OpenBSD__
+  /* Allow better executable memory allocation for OpenBSD W^X mode. */
+  void *p = mcode_alloc_at(J, 0, sz, MCPROT_RUN);
+  if (p && mcode_setprot(p, sz, MCPROT_GEN)) {
+    mcode_free(J, p, sz);
+    return NULL;
+  }
+  return p;
+#else
+  return mcode_alloc_at(J, 0, sz, MCPROT_GEN);
+#endif
+}
 
 #endif
 

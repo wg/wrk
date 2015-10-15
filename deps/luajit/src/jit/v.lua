@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- Verbose mode of the LuaJIT compiler.
 --
--- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2015 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 --
@@ -59,7 +59,7 @@
 
 -- Cache some library functions and objects.
 local jit = require("jit")
-assert(jit.version_num == 20003, "LuaJIT core/library version mismatch")
+assert(jit.version_num == 20004, "LuaJIT core/library version mismatch")
 local jutil = require("jit.util")
 local vmdef = require("jit.vmdef")
 local funcinfo, traceinfo = jutil.funcinfo, jutil.traceinfo

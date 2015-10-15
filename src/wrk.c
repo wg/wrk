@@ -1,17 +1,18 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
 #include "wrk.h"
+#include "script.h"
 #include "main.h"
 
 static struct config {
-    struct addrinfo addr;
-    uint64_t threads;
     uint64_t connections;
     uint64_t duration;
+    uint64_t threads;
     uint64_t timeout;
     uint64_t pipeline;
-    bool     latency;
+    bool     delay;
     bool     dynamic;
+    bool     latency;
     char    *script;
     SSL_CTX *ctx;
     WRK_SSL_METHOD_CONST SSL_METHOD *ssl_method;
@@ -21,7 +22,6 @@ static struct config {
 static struct {
     stats *latency;
     stats *requests;
-    pthread_mutex_t mutex;
 } statistics;
 
 static struct sock sock = {
@@ -75,57 +75,18 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
-    struct addrinfo *addrs, *addr;
-    struct http_parser_url parser_url;
-    char *url, **headers;
-    int rc;
+    char *url, **headers = zmalloc(argc * sizeof(char *));
+    struct http_parser_url parts = {};
 
-    headers = zmalloc((argc / 2) * sizeof(char *));
-
-    if (parse_args(&cfg, &url, headers, argc, argv)) {
+    if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
         usage();
         exit(1);
     }
 
-    if (http_parser_parse_url(url, strlen(url), 0, &parser_url)) {
-        fprintf(stderr, "invalid URL: %s\n", url);
-        exit(1);
-    }
-
-    char *schema  = extract_url_part(url, &parser_url, UF_SCHEMA);
-    char *host    = extract_url_part(url, &parser_url, UF_HOST);
-    char *port    = extract_url_part(url, &parser_url, UF_PORT);
+    char *schema  = copy_url_part(url, &parts, UF_SCHEMA);
+    char *host    = copy_url_part(url, &parts, UF_HOST);
+    char *port    = copy_url_part(url, &parts, UF_PORT);
     char *service = port ? port : schema;
-    char *path    = "/";
-
-    if (parser_url.field_set & (1 << UF_PATH)) {
-        path = &url[parser_url.field_data[UF_PATH].off];
-    }
-
-    struct addrinfo hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
-    };
-
-    if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
-        const char *msg = gai_strerror(rc);
-        fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
-
-    for (addr = addrs; addr != NULL; addr = addr->ai_next) {
-        int fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-        if (fd == -1) continue;
-        rc = connect(fd, addr->ai_addr, addr->ai_addrlen);
-        close(fd);
-        if (rc == 0) break;
-    }
-
-    if (addr == NULL) {
-        char *msg = strerror(errno);
-        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-        exit(1);
-    }
 
     if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init(cfg.ssl_method, cfg.ssl_cipher)) == NULL) {
@@ -142,29 +103,30 @@ int main(int argc, char **argv) {
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
-    cfg.addr = *addr;
 
-    pthread_mutex_init(&statistics.mutex, NULL);
-    statistics.latency  = stats_alloc(SAMPLES);
-    statistics.requests = stats_alloc(SAMPLES);
+    statistics.latency  = stats_alloc(cfg.timeout * 1000);
+    statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
+    thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
-    thread *threads = zcalloc(cfg.threads * sizeof(thread));
-    uint64_t connections = cfg.connections / cfg.threads;
-    uint64_t stop_at     = time_us() + (cfg.duration * 1000000);
+    lua_State *L = script_create(cfg.script, url, headers);
+    if (!script_resolve(L, host, service)) {
+        char *msg = strerror(errno);
+        fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
+        exit(1);
+    }
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
-        thread *t = &threads[i];
+        thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
-        t->connections = connections;
-        t->stop_at     = stop_at;
+        t->connections = cfg.connections / cfg.threads;
 
-        t->L = script_create(schema, host, port, path);
-        script_headers(t->L, headers);
-        script_init(t->L, cfg.script, argc - optind, &argv[optind]);
+        t->L = script_create(cfg.script, url, headers);
+        script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
-            cfg.dynamic = !script_is_static(t->L);
+            cfg.dynamic  = !script_is_static(t->L);
+            cfg.delay    = script_has_delay(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;
                 parser_settings.on_header_value = header_value;
@@ -195,6 +157,9 @@ int main(int argc, char **argv) {
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
+    sleep(cfg.duration);
+    stop = 1;
+
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
         pthread_join(t->thread, NULL);
@@ -213,6 +178,11 @@ int main(int argc, char **argv) {
     long double runtime_s   = runtime_us / 1000000.0;
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
+
+    if (complete / cfg.connections > 0) {
+        int64_t interval = runtime_us / (complete / cfg.connections);
+        stats_correct(statistics.latency, interval);
+    }
 
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
@@ -234,7 +204,6 @@ int main(int argc, char **argv) {
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
-    lua_State *L = threads[0].L;
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
@@ -246,11 +215,6 @@ int main(int argc, char **argv) {
 
 void *thread_main(void *arg) {
     thread *thread = arg;
-    aeEventLoop *loop = thread->loop;
-
-    thread->cs = zcalloc(thread->connections * sizeof(connection));
-    tinymt64_init(&thread->rand, time_us());
-    thread->latency = stats_alloc(100000);
 
     char *request = NULL;
     size_t length = 0;
@@ -259,6 +223,7 @@ void *thread_main(void *arg) {
         script_request(thread->L, &request, &length);
     }
 
+    thread->cs = zcalloc(thread->connections * sizeof(connection));
     connection *c = thread->cs;
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
@@ -266,11 +231,12 @@ void *thread_main(void *arg) {
         c->ssl     = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request = request;
         c->length  = length;
+        c->delayed = cfg.delay;
         connect_socket(thread, c);
     }
 
-    aeCreateTimeEvent(loop, CALIBRATE_DELAY_MS, calibrate, thread, NULL);
-    aeCreateTimeEvent(loop, TIMEOUT_INTERVAL_MS, check_timeouts, thread, NULL);
+    aeEventLoop *loop = thread->loop;
+    aeCreateTimeEvent(loop, RECORD_INTERVAL_MS, record_rate, thread, NULL);
 
     thread->start = time_us();
     aeMain(loop);
@@ -278,29 +244,20 @@ void *thread_main(void *arg) {
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
 
-    uint64_t max = thread->latency->max;
-    stats_free(thread->latency);
-
-    pthread_mutex_lock(&statistics.mutex);
-    for (uint64_t i = 0; i < thread->missed; i++) {
-        stats_record(statistics.latency, max);
-    }
-    pthread_mutex_unlock(&statistics.mutex);
-
     return NULL;
 }
 
 static int connect_socket(thread *thread, connection *c) {
-    struct addrinfo addr = cfg.addr;
+    struct addrinfo *addr = thread->addr;
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
 
-    fd = socket(addr.ai_family, addr.ai_socktype, addr.ai_protocol);
+    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
-    if (connect(fd, addr.ai_addr, addr.ai_addrlen) == -1) {
+    if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
     }
 
@@ -327,66 +284,29 @@ static int reconnect_socket(thread *thread, connection *c) {
     return connect_socket(thread, c);
 }
 
-static int calibrate(aeEventLoop *loop, long long id, void *data) {
+static int record_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
-    (void) stats_summarize(thread->latency);
-    long double latency = stats_percentile(thread->latency, 90.0) / 1000.0L;
-    long double interval = MAX(latency * 2, 10);
-    long double rate = (interval / latency) * thread->connections;
+    if (thread->requests > 0) {
+        uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
+        uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
 
-    if (latency == 0) return CALIBRATE_DELAY_MS;
+        stats_record(statistics.requests, requests);
 
-    thread->interval = interval;
-    thread->rate     = ceil(rate / 10);
-    thread->start    = time_us();
-    thread->requests = 0;
-    stats_reset(thread->latency);
+        thread->requests = 0;
+        thread->start    = time_us();
+    }
 
-    aeCreateTimeEvent(loop, thread->interval, sample_rate, thread, NULL);
+    if (stop) aeStop(loop);
 
+    return RECORD_INTERVAL_MS;
+}
+
+static int delay_request(aeEventLoop *loop, long long id, void *data) {
+    connection *c = data;
+    c->delayed = false;
+    aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, c);
     return AE_NOMORE;
-}
-
-static int check_timeouts(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-    connection *c  = thread->cs;
-    uint64_t now   = time_us();
-
-    uint64_t maxAge = now - (cfg.timeout * 1000);
-
-    for (uint64_t i = 0; i < thread->connections; i++, c++) {
-        if (maxAge > c->start) {
-            thread->errors.timeout++;
-        }
-    }
-
-    if (stop || now >= thread->stop_at) {
-        aeStop(loop);
-    }
-
-    return TIMEOUT_INTERVAL_MS;
-}
-
-static int sample_rate(aeEventLoop *loop, long long id, void *data) {
-    thread *thread = data;
-
-    uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-    uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
-    uint64_t missed = thread->rate - MIN(thread->rate, thread->latency->limit);
-    uint64_t count = thread->rate - missed;
-
-    pthread_mutex_lock(&statistics.mutex);
-    stats_sample(statistics.latency, &thread->rand, count, thread->latency);
-    stats_record(statistics.requests, requests);
-    pthread_mutex_unlock(&statistics.mutex);
-
-    thread->missed  += missed;
-    thread->requests = 0;
-    thread->start    = time_us();
-    stats_rewind(thread->latency);
-
-    return thread->interval;
 }
 
 static int header_field(http_parser *parser, const char *at, size_t len) {
@@ -434,13 +354,11 @@ static int response_complete(http_parser *parser) {
         c->state = FIELD;
     }
 
-    if (now >= thread->stop_at) {
-        aeStop(thread->loop);
-        goto done;
-    }
-
     if (--c->pending == 0) {
-        stats_record(thread->latency, now - c->start);
+        if (!stats_record(statistics.latency, now - c->start)) {
+            thread->errors.timeout++;
+        }
+        c->delayed = cfg.delay;
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 
@@ -475,15 +393,25 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
   error:
     c->thread->errors.connect++;
     reconnect_socket(c->thread, c);
-
 }
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
-    if (!c->written && cfg.dynamic) {
-        script_request(thread->L, &c->request, &c->length);
+    if (c->delayed) {
+        uint64_t delay = script_delay(thread->L);
+        aeDeleteFileEvent(loop, fd, AE_WRITABLE);
+        aeCreateTimeEvent(loop, delay, delay_request, c, NULL);
+        return;
+    }
+
+    if (!c->written) {
+        if (cfg.dynamic) {
+            script_request(thread->L, &c->request, &c->length);
+        }
+        c->start   = time_us();
+        c->pending = cfg.pipeline;
     }
 
     char  *buf = c->request + c->written;
@@ -494,11 +422,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
-    }
-
-    if (!c->written) {
-        c->start = time_us();
-        c->pending = cfg.pipeline;
     }
 
     c->written += n;
@@ -513,7 +436,6 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     thread->errors.write++;
     reconnect_socket(thread, c);
 }
-
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
@@ -543,12 +465,12 @@ static uint64_t time_us() {
     return (t.tv_sec * 1000000) + t.tv_usec;
 }
 
-static char *extract_url_part(char *url, struct http_parser_url *parser_url, enum http_parser_url_fields field) {
+static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_parser_url_fields field) {
     char *part = NULL;
 
-    if (parser_url->field_set & (1 << field)) {
-        uint16_t off = parser_url->field_data[field].off;
-        uint16_t len = parser_url->field_data[field].len;
+    if (parts->field_set & (1 << field)) {
+        uint16_t off = parts->field_data[field].off;
+        uint16_t len = parts->field_data[field].len;
         part = zcalloc(len + 1 * sizeof(char));
         memcpy(part, &url[off], len);
     }
@@ -571,8 +493,9 @@ static struct option longopts[] = {
     { NULL,          0,                 NULL,  0  }
 };
 
-static int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
-    char c, **header = headers;
+static int parse_args(struct config *cfg, char **url, struct http_parser_url *parts, char **headers, int argc, char **argv) {
+    char **header = headers;
+    int c;
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
@@ -645,6 +568,11 @@ static int parse_args(struct config *cfg, char **url, char **headers, int argc, 
 
     if (optind == argc || !cfg->threads || !cfg->duration) return -1;
 
+    if (!script_parse_url(argv[optind], parts)) {
+        fprintf(stderr, "invalid URL: %s\n", argv[optind]);
+        return -1;
+    }
+
     if (!cfg->connections || cfg->connections < cfg->threads) {
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
@@ -675,7 +603,7 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     uint64_t max = stats->max;
-    long double mean  = stats_summarize(stats);
+    long double mean  = stats_mean(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("    %-10s", name);

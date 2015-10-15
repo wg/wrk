@@ -9,6 +9,7 @@ ifeq ($(TARGET), sunos)
 else ifeq ($(TARGET), darwin)
 	LDFLAGS += -pagezero_size 10000 -image_base 100000000
 else ifeq ($(TARGET), linux)
+	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE
 	LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
@@ -17,7 +18,7 @@ else ifeq ($(TARGET), freebsd)
 endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
-		ae.c zmalloc.c http_parser.c tinymt64.c
+		ae.c zmalloc.c http_parser.c
 BIN  := wrk
 
 ODIR := obj

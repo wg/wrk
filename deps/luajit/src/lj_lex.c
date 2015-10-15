@@ -1,6 +1,6 @@
 /*
 ** Lexical analyzer.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 **
 ** Major portions taken verbatim or adapted from the Lua interpreter.
 ** Copyright (C) 1994-2008 Lua.org, PUC-Rio. See Copyright Notice in lua.h
@@ -378,6 +378,7 @@ int lj_lex_setup(lua_State *L, LexState *ls)
   ls->vtop = 0;
   ls->bcstack = NULL;
   ls->sizebcstack = 0;
+  ls->token = 0;
   ls->lookahead = TK_eof;  /* No look-ahead token. */
   ls->linenumber = 1;
   ls->lastline = 1;

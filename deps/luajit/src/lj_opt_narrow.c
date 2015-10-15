@@ -1,7 +1,7 @@
 /*
 ** NARROW: Narrowing of numbers to integers (double to int32_t).
 ** STRIPOV: Stripping of overflow checks.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_narrow_c
@@ -247,10 +247,16 @@ static void narrow_stripov_backprop(NarrowConv *nc, IRRef ref, int depth)
     if (bp) {
       ref = bp->val;
     } else if (++depth < NARROW_MAX_BACKPROP && nc->sp < nc->maxsp) {
+      NarrowIns *savesp = nc->sp;
       narrow_stripov_backprop(nc, ir->op1, depth);
-      narrow_stripov_backprop(nc, ir->op2, depth);
-      *nc->sp++ = NARROWINS(IRT(ir->o - IR_ADDOV + IR_ADD, IRT_INT), ref);
-      return;
+      if (nc->sp < nc->maxsp) {
+	narrow_stripov_backprop(nc, ir->op2, depth);
+	if (nc->sp < nc->maxsp) {
+	  *nc->sp++ = NARROWINS(IRT(ir->o - IR_ADDOV + IR_ADD, IRT_INT), ref);
+	  return;
+	}
+      }
+      nc->sp = savesp;  /* Path too deep, need to backtrack. */
     }
   }
   *nc->sp++ = NARROWINS(NARROW_REF, ref);
@@ -262,6 +268,8 @@ static int narrow_conv_backprop(NarrowConv *nc, IRRef ref, int depth)
   jit_State *J = nc->J;
   IRIns *ir = IR(ref);
   IRRef cref;
+
+  if (nc->sp >= nc->maxsp) return 10;  /* Path too deep. */
 
   /* Check the easy cases first. */
   if (ir->o == IR_CONV && (ir->op2 & IRCONV_SRCMASK) == IRT_INT) {

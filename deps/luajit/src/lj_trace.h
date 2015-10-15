@@ -1,6 +1,6 @@
 /*
 ** Trace management.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #ifndef _LJ_TRACE_H

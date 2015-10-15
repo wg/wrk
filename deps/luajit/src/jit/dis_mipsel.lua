@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT MIPSEL disassembler wrapper module.
 --
--- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2015 Mike Pall. All rights reserved.
 -- Released under the MIT license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 -- This module just exports the little-endian functions from the

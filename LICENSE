@@ -1,7 +1,6 @@
 
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+                          Modified Apache 2.0 License
+                         Version 2.0.1, February 2015
 
    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
@@ -120,6 +119,12 @@
           or as an addendum to the NOTICE text from the Work, provided
           that such additional attribution notices cannot be construed
           as modifying the License.
+
+      (e) If the Derivative Work includes substantial changes to features
+          or functionality of the Work, then you must remove the name of
+          the Work, and any derivation thereof, from all copies that you
+          distribute, whether in Source or Object form, except as required
+          in copyright, patent, trademark, and attribution notices.
 
       You may add Your own copyright statement to Your modifications and
       may provide additional or different license terms and conditions

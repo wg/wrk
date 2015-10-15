@@ -1,6 +1,6 @@
 |// Low-level VM code for x86 CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 |
 |.if P64
 |.arch x64
@@ -1617,7 +1617,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  mov RD, 1+3
   |  jmp ->fff_res
   |
-  |.ffunc_1 ipairs_aux
+  |.ffunc_2 ipairs_aux
   |  cmp dword [BASE+4], LJ_TTAB;  jne ->fff_fallback
   |  cmp dword [BASE+12], LJ_TISNUM
   |.if DUALNUM
@@ -2198,7 +2198,7 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |
   |.ffunc_nnr math_fmod
-  |1: ; fprem; fnstsw ax; sahf; jp <1
+  |1: ; fprem; fnstsw ax; and ax, 0x400; jnz <1
   |  fpop1
   |  jmp ->fff_resn
   |
@@ -2564,8 +2564,8 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.define TOBIT_BIAS, 0x59c00000	// 2^52 + 2^51 (float, not double!).
   |
-  |.macro .ffunc_bit, name, kind
-  |  .ffunc_1 name
+  |.macro .ffunc_bit, name, kind, fdef
+  |  fdef name
   |.if kind == 2
   |.if SSE
   |  sseconst_tobit xmm1, RBa
@@ -2606,6 +2606,10 @@ static void build_subroutines(BuildCtx *ctx)
   |.endif
   |.endif
   |2:
+  |.endmacro
+  |
+  |.macro .ffunc_bit, name, kind
+  |  .ffunc_bit name, kind, .ffunc_1
   |.endmacro
   |
   |.ffunc_bit bit_tobit, 0
@@ -2681,7 +2685,7 @@ static void build_subroutines(BuildCtx *ctx)
   |
   |.macro .ffunc_bit_sh, name, ins
   |.if DUALNUM
-  |  .ffunc_bit name, 1
+  |  .ffunc_bit name, 1, .ffunc_2
   |  // Note: no inline conversion from number for 2nd argument!
   |  cmp dword [BASE+12], LJ_TISNUM; jne ->fff_fallback
   |  mov RA, dword [BASE+8]
@@ -5320,8 +5324,7 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |  jnz <4
     |  movzx RA, PC_RA
     |  not RAa
-    |  lea RA, [BASE+RA*8]
-    |  mov LFUNC:KBASE, [RA-8]		// Need to prepare KBASE.
+    |  mov LFUNC:KBASE, [BASE+RA*8-8]	// Need to prepare KBASE.
     |  mov KBASE, LFUNC:KBASE->pc
     |  mov KBASE, [KBASE+PC2PROTO(k)]
     |  jmp <4

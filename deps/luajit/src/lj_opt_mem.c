@@ -3,7 +3,7 @@
 ** AA: Alias Analysis using high-level semantic disambiguation.
 ** FWD: Load Forwarding (L2L) + Store Forwarding (S2L).
 ** DSE: Dead-Store Elimination.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_opt_mem_c
@@ -740,21 +740,19 @@ retry:
     case ALIAS_MUST:
       /* Emit conversion if the loaded type doesn't match the forwarded type. */
       if (!irt_sametype(fins->t, IR(store->op2)->t)) {
-	IRType st = irt_type(fins->t);
-	if (st == IRT_I8 || st == IRT_I16) {  /* Trunc + sign-extend. */
-	  st |= IRCONV_SEXT;
-	} else if (st == IRT_U8 || st == IRT_U16) {  /* Trunc + zero-extend. */
-	} else if (st == IRT_INT) {
-	  st = irt_type(IR(store->op2)->t);  /* Needs dummy CONV.int.*. */
-	} else {  /* I64/U64 are boxed, U32 is hidden behind a CONV.num.u32. */
-	  goto store_fwd;
+	IRType dt = irt_type(fins->t), st = irt_type(IR(store->op2)->t);
+	if (dt == IRT_I8 || dt == IRT_I16) {  /* Trunc + sign-extend. */
+	  st = dt | IRCONV_SEXT;
+	  dt = IRT_INT;
+	} else if (dt == IRT_U8 || dt == IRT_U16) {  /* Trunc + zero-extend. */
+	  st = dt;
+	  dt = IRT_INT;
 	}
-	fins->ot = IRTI(IR_CONV);
+	fins->ot = IRT(IR_CONV, dt);
 	fins->op1 = store->op2;
-	fins->op2 = (IRT_INT<<5)|st;
+	fins->op2 = (dt<<5)|st;
 	return RETRYFOLD;
       }
-    store_fwd:
       return store->op2;  /* Store forwarding. */
     }
     ref = store->prev;
@@ -795,6 +793,7 @@ TRef LJ_FASTCALL lj_opt_dse_xstore(jit_State *J)
   IRRef ref = *refp;
   if (J->chain[IR_CALLXS] > lim) lim = J->chain[IR_CALLXS];
   if (J->chain[IR_XBAR] > lim) lim = J->chain[IR_XBAR];
+  if (J->chain[IR_XSNEW] > lim) lim = J->chain[IR_XSNEW];
   while (ref > lim) {  /* Search for redundant or conflicting stores. */
     IRIns *store = IR(ref);
     switch (aa_xref(J, xr, fins, store)) {

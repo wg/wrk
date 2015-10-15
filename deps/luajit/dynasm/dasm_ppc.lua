@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------------
 -- DynASM PPC module.
 --
--- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2015 Mike Pall. All rights reserved.
 -- See dynasm.lua for full copyright notice.
 ------------------------------------------------------------------------------
 

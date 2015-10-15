@@ -1,6 +1,6 @@
 /*
 ** Debugging and introspection.
-** Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+** Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 */
 
 #define lj_debug_c
@@ -14,6 +14,7 @@
 #include "lj_state.h"
 #include "lj_frame.h"
 #include "lj_bc.h"
+#include "lj_vm.h"
 #if LJ_HASJIT
 #include "lj_jit.h"
 #endif
@@ -86,7 +87,8 @@ static BCPos debug_framepc(lua_State *L, GCfunc *fn, cTValue *nextframe)
 	if (frame_islua(f)) {
 	  f = frame_prevl(f);
 	} else {
-	  if (frame_isc(f))
+	  if (frame_isc(f) || (LJ_HASFFI && frame_iscont(f) &&
+			       (f-1)->u32.lo == LJ_CONT_FFI_CALLBACK))
 	    cf = cframe_raw(cframe_prev(cf));
 	  f = frame_prevd(f);
 	}
@@ -463,7 +465,7 @@ int lj_debug_getinfo(lua_State *L, const char *what, lj_Debug *ar, int ext)
 	lj_debug_shortname(ar->short_src, name);
 	ar->linedefined = (int)firstline;
 	ar->lastlinedefined = (int)(firstline + pt->numline);
-	ar->what = firstline ? "Lua" : "main";
+	ar->what = (firstline || !pt->numline) ? "Lua" : "main";
       } else {
 	ar->source = "=[C]";
 	ar->short_src[0] = '[';

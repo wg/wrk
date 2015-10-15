@@ -5,28 +5,31 @@
 #include <lua.h>
 #include <lualib.h>
 #include <lauxlib.h>
+#include <unistd.h>
 #include "stats.h"
+#include "wrk.h"
 
-typedef struct {
-    char  *buffer;
-    size_t length;
-    char  *cursor;
-} buffer;
+lua_State *script_create(char *, char *, char **);
 
-lua_State *script_create(char *, char *, char *, char *);
-void script_headers(lua_State *, char **);
-size_t script_verify_request(lua_State *L);
-
-void script_init(lua_State *, char *, int, char **);
+bool script_resolve(lua_State *, char *, char *);
+void script_setup(lua_State *, thread *);
 void script_done(lua_State *, stats *, stats *);
+
+void script_init(lua_State *, thread *, int, char **);
+uint64_t script_delay(lua_State *);
 void script_request(lua_State *, char **, size_t *);
 void script_response(lua_State *, int, buffer *, buffer *);
+size_t script_verify_request(lua_State *L);
 
 bool script_is_static(lua_State *);
 bool script_want_response(lua_State *L);
+bool script_has_delay(lua_State *L);
 bool script_has_done(lua_State *L);
 void script_summary(lua_State *, uint64_t, uint64_t, uint64_t);
 void script_errors(lua_State *, errors *);
+
+void script_copy_value(lua_State *, lua_State *, int);
+int script_parse_url(char *, struct http_parser_url *);
 
 void buffer_append(buffer *, const char *, size_t);
 void buffer_reset(buffer *);

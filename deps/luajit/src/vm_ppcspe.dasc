@@ -1,6 +1,6 @@
 |// Low-level VM code for PowerPC/e500 CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 |
 |.arch ppc
 |.section code_op, code_sub

@@ -4,7 +4,7 @@
 <title>LuaJIT Change History</title>
 <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <meta name="Author" content="Mike Pall">
-<meta name="Copyright" content="Copyright (C) 2005-2014, Mike Pall">
+<meta name="Copyright" content="Copyright (C) 2005-2015, Mike Pall">
 <meta name="Language" content="en">
 <link rel="stylesheet" type="text/css" href="bluequad.css" media="screen">
 <link rel="stylesheet" type="text/css" href="bluequad-print.css" media="print">
@@ -63,7 +63,7 @@ div.major { max-width: 600px; padding: 1em; margin: 1em 0 1em 0; }
 <div id="main">
 <p>
 This is a list of changes between the released versions of LuaJIT.<br>
-The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.3</strong>.<br>
+The current <span style="color: #0000c0;">stable version</span> is <strong>LuaJIT&nbsp;2.0.4</strong>.<br>
 </p>
 <p>
 Please check the
@@ -72,6 +72,56 @@ to see whether newer versions are available.
 </p>
 
 <div class="major" style="background: #d0d0ff;">
+<h2 id="LuaJIT-2.0.4">LuaJIT 2.0.4 &mdash; 2015-05-14</h2>
+<ul>
+<li>Fix stack check in narrowing optimization.</li>
+<li>Fix Lua/C API typecheck error for special indexes.</li>
+<li>Fix string to number conversion.</li>
+<li>Fix lexer error for chunks without tokens.</li>
+<li>Don't compile <tt>IR_RETF</tt> after <tt>CALLT</tt> to ff with-side effects.</li>
+<li>Fix <tt>BC_UCLO</tt>/<tt>BC_JMP</tt> join optimization in Lua parser.</li>
+<li>Fix corner case in string to number conversion.</li>
+<li>Gracefully handle <tt>lua_error()</tt> for a suspended coroutine.</li>
+<li>Avoid error messages when building with Clang.</li>
+<li>Fix snapshot #0 handling for traces with a stack check on entry.</li>
+<li>Fix fused constant loads under high register pressure.</li>
+<li>Invalidate backpropagation cache after DCE.</li>
+<li>Fix ABC elimination.</li>
+<li>Fix debug info for main chunk of stripped bytecode.</li>
+<li>Fix FOLD rule for <tt>string.sub(s, ...) == k</tt>.</li>
+<li>Fix FOLD rule for <tt>STRREF</tt> of <tt>SNEW</tt>.</li>
+<li>Fix frame traversal while searching for error function.</li>
+<li>Prevent GC estimate miscalculation due to buffer growth.</li>
+<li>Prevent adding side traces for stack checks.</li>
+<li>Fix top slot calculation for snapshots with continuations.</li>
+<li>Fix check for reuse of SCEV results in <tt>FORL</tt>.</li>
+<li>Add PS Vita port.</li>
+<li>Fix compatibility issues with Illumos.</li>
+<li>Fix DragonFly build (unsupported).</li>
+<li>OpenBSD/x86: Better executable memory allocation for W^X mode.</li>
+<li>x86: Fix argument checks for <tt>ipairs()</tt> iterator.</li>
+<li>x86: <tt>lj_math_random_step()</tt> clobbers XMM regs on OSX Clang.</li>
+<li>x86: Fix code generation for unused result of <tt>math.random()</tt>.</li>
+<li>x64: Allow building with <tt>LUAJIT_USE_SYSMALLOC</tt> and <tt>LUAJIT_USE_VALGRIND</tt>.</li>
+<li>x86/x64: Fix argument check for bit shifts.</li>
+<li>x86/x64: Fix code generation for fused test/arith ops.</li>
+<li>ARM: Fix write barrier check in <tt>BC_USETS</tt>.</li>
+<li>PPC: Fix red zone overflow in machine code generation.</li>
+<li>PPC: Don't use <tt>mcrxr</tt> on PPE.</li>
+<li>Various archs: Fix excess stack growth in interpreter.</li>
+<li>FFI: Fix FOLD rule for <tt>TOBIT</tt> + <tt>CONV num.u32</tt>.</li>
+<li>FFI: Prevent DSE across <tt>ffi.string()</tt>.</li>
+<li>FFI: No meta fallback when indexing pointer to incomplete struct.</li>
+<li>FFI: Fix initialization of unions of subtypes.</li>
+<li>FFI: Fix cdata vs. non-cdata arithmetic and comparisons.</li>
+<li>FFI: Fix <tt>__index</tt>/<tt>__newindex</tt> metamethod resolution for ctypes.</li>
+<li>FFI: Fix compilation of reference field access.</li>
+<li>FFI: Fix frame traversal for backtraces with FFI callbacks.</li>
+<li>FFI: Fix recording of indexing a struct pointer ctype object itself.</li>
+<li>FFI: Allow non-scalar cdata to be compared for equality by address.</li>
+<li>FFI: Fix pseudo type conversions for type punning.</li>
+</ul>
+
 <h2 id="LuaJIT-2.0.3">LuaJIT 2.0.3 &mdash; 2014-03-12</h2>
 <ul>
 <li>Add PS4 port.</li>
@@ -918,7 +968,7 @@ This is the initial non-public release of LuaJIT.
 </div>
 <div id="foot">
 <hr class="hide">
-Copyright &copy; 2005-2014 Mike Pall
+Copyright &copy; 2005-2015 Mike Pall
 <span class="noprint">
 &middot;
 <a href="contact.html">Contact</a>

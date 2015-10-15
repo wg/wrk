@@ -1,6 +1,6 @@
 |// Low-level VM code for ARM CPUs.
 |// Bytecode interpreter, fast functions and helper functions.
-|// Copyright (C) 2005-2014 Mike Pall. See Copyright Notice in luajit.h
+|// Copyright (C) 2005-2015 Mike Pall. See Copyright Notice in luajit.h
 |
 |.arch arm
 |.section code_op, code_sub
@@ -335,7 +335,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  // - The GC shrinks the stack in between.
   |  // - A return back from a lua_call() with (high) nresults adjustment.
   |  str BASE, L->top			// Save current top held in BASE (yes).
-  |  mov CARG2, KBASE
+  |  lsr CARG2, KBASE, #3
   |  mov CARG1, L
   |  bl extern lj_state_growstack	// (lua_State *L, int n)
   |  ldr BASE, L->top			// Need the (realloced) L->top in BASE.
@@ -389,7 +389,7 @@ static void build_subroutines(BuildCtx *ctx)
   |  str BASE, L->base
   |   add PC, PC, #4			// Must point after first instruction.
   |  str RC, L->top
-  |   lsr CARG3, RA, #3
+  |   lsr CARG2, RA, #3
   |2:
   |  // L->base = new base, L->top = top
   |  str PC, SAVE_PC
@@ -539,9 +539,8 @@ static void build_subroutines(BuildCtx *ctx)
   |1:
   |  beq ->cont_ffi_callback		// cont = 1: return from FFI callback.
   |  // cont = 0: tailcall from C function.
-  |  ldr CARG3, [BASE, FRAME_FUNC]
-  |   sub CARG4, CARG4, #16
-  |   sub RC, CARG4, BASE
+  |  sub CARG4, CARG4, #16
+  |  sub RC, CARG4, BASE
   |  b ->vm_call_tail
   |.endif
   |
@@ -3241,10 +3240,10 @@ static void build_ins(BuildCtx *ctx, BCOp op, int defop)
     |    mvn RC, RC
     |  ldr UPVAL:CARG2, [LFUNC:CARG2, RA]
     |    ldr STR:CARG3, [KBASE, RC, lsl #2]
-    |    mvn CARG4, #~LJ_TSTR
     |  ldrb RB, UPVAL:CARG2->marked
-    |   ldr CARG2, UPVAL:CARG2->v
     |     ldrb RC, UPVAL:CARG2->closed
+    |   ldr CARG2, UPVAL:CARG2->v
+    |    mvn CARG4, #~LJ_TSTR
     |  tst RB, #LJ_GC_BLACK		// isblack(uv)
     |    ldrb RB, STR:CARG3->marked
     |   strd CARG34, [CARG2]

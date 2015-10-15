@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------
 -- LuaJIT PPC disassembler module.
 --
--- Copyright (C) 2005-2014 Mike Pall. All rights reserved.
+-- Copyright (C) 2005-2015 Mike Pall. All rights reserved.
 -- Released under the MIT/X license. See Copyright Notice in luajit.h
 ----------------------------------------------------------------------------
 -- This is a helper module used by the LuaJIT machine code dumper module.

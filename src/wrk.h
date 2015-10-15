@@ -5,10 +5,12 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <sys/types.h>
-#include <strings.h>
+#include <netdb.h>
+#include <sys/socket.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <lua.h>
 
 #ifdef SSL_OP_NO_TLSv1_2
 #define HAVE_TLSV1_X
@@ -22,35 +24,34 @@
 
 #include "stats.h"
 #include "ae.h"
-#include "script.h"
 #include "http_parser.h"
 
-#define VERSION  "3.1.1"
+#define VERSION  "4.0.0"
 #define RECVBUF  8192
-#define SAMPLES  100000000
 
+#define MAX_THREAD_RATE_S   10000000
 #define SOCKET_TIMEOUT_MS   2000
-#define CALIBRATE_DELAY_MS  500
-#define TIMEOUT_INTERVAL_MS 2000
+#define RECORD_INTERVAL_MS  100
 
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
+    struct addrinfo *addr;
     uint64_t connections;
-    int interval;
-    uint64_t stop_at;
     uint64_t complete;
     uint64_t requests;
     uint64_t bytes;
     uint64_t start;
-    uint64_t rate;
-    uint64_t missed;
-    stats *latency;
-    tinymt64_t rand;
     lua_State *L;
     errors errors;
     struct connection *cs;
 } thread;
+
+typedef struct {
+    char  *buffer;
+    size_t length;
+    char  *cursor;
+} buffer;
 
 typedef struct connection {
     thread *thread;
@@ -60,6 +61,7 @@ typedef struct connection {
     } state;
     int fd;
     SSL *ssl;
+    bool delayed;
     uint64_t start;
     char *request;
     size_t length;
