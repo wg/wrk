@@ -492,8 +492,8 @@ void script_copy_value(lua_State *src, lua_State *dst, int index) {
             lua_newtable(dst);
             lua_pushnil(src);
             while (lua_next(src, index - 1)) {
-                script_copy_value(src, dst, -1);
                 script_copy_value(src, dst, -2);
+                script_copy_value(src, dst, -1);
                 lua_settable(dst, -3);
                 lua_pop(src, 1);
             }
