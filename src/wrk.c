@@ -432,6 +432,8 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
         }
 
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
+        if (n == 0 && !http_body_is_final(&c->parser)) goto error;
+
         c->thread->bytes += n;
     } while (n == RECVBUF && sock.readable(c) > 0);
 
