@@ -49,6 +49,6 @@ static char *copy_url_part(char *, struct http_parser_url *, enum http_parser_ur
 
 static void print_stats_header();
 static void print_stats(char *, stats *, char *(*)(long double));
-static void print_stats_latency(stats *);
+static void print_stats_latency(struct config *, stats *);
 
 #endif /* MAIN_H */

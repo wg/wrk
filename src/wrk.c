@@ -5,16 +5,18 @@
 #include "main.h"
 
 static struct config {
-    uint64_t connections;
-    uint64_t duration;
-    uint64_t threads;
-    uint64_t timeout;
-    uint64_t pipeline;
-    bool     delay;
-    bool     dynamic;
-    bool     latency;
-    char    *script;
-    SSL_CTX *ctx;
+    uint64_t     connections;
+    uint64_t     duration;
+    uint64_t     threads;
+    uint64_t     timeout;
+    uint64_t     pipeline;
+    bool         delay;
+    bool         dynamic;
+    bool         latency;
+    long double *latency_percentiles;
+    size_t       latency_percentiles_number;
+    char        *script;
+    SSL_CTX     *ctx;
 } cfg;
 
 static struct {
@@ -41,20 +43,26 @@ static void handler(int sig) {
 }
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"
-           "  Options:                                            \n"
-           "    -c, --connections <N>  Connections to keep open   \n"
-           "    -d, --duration    <T>  Duration of test           \n"
-           "    -t, --threads     <N>  Number of threads to use   \n"
-           "                                                      \n"
-           "    -s, --script      <S>  Load Lua script file       \n"
-           "    -H, --header      <H>  Add header to request      \n"
-           "        --latency          Print latency statistics   \n"
-           "        --timeout     <T>  Socket/request timeout     \n"
-           "    -v, --version          Print version details      \n"
-           "                                                      \n"
-           "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
-           "  Time arguments may include a time unit (2s, 2m, 2h)\n");
+    printf("Usage: wrk <options> <url>                                    \n"
+           "  Options:                                                    \n"
+           "    -c, --connections         <N>  Connections to keep open   \n"
+           "    -d, --duration            <T>  Duration of test           \n"
+           "    -t, --threads             <N>  Number of threads to use   \n"
+           "                                                              \n"
+           "    -s, --script              <S>  Load Lua script file       \n"
+           "    -H, --header              <H>  Add header to request      \n"
+           "    -L  --latency                  Print latency statistics   \n"
+           "    -P  --latency-percentiles <P>  Display only given perc    \n"
+           "        --timeout             <T>  Socket/request timeout     \n"
+           "    -v, --version                  Print version details      \n"
+           "                                                              \n"
+           "  Numeric arguments may include a SI unit (1k, 1M, 1G)        \n"
+           "  Time arguments may include a time unit (2s, 2m, 2h)         \n"
+           "                                                              \n"
+           "  Latency percentiles have comma separated format and may     \n"
+           "  include 'all', that prints all percentiles from 1st to      \n"
+           "  100th (-P 90,95,99,99.5 or -P all or even -P all,99.5)      \n"
+           "  Every percentile number should be within [0..100]           \n");
 }
 
 int main(int argc, char **argv) {
@@ -170,7 +178,7 @@ int main(int argc, char **argv) {
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
-    if (cfg.latency) print_stats_latency(statistics.latency);
+    if (cfg.latency) print_stats_latency(&cfg, statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
 
@@ -463,18 +471,78 @@ static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_p
     return part;
 }
 
+static int compare_long_doubles(const void *a, const void *b) {
+    long double val_a = *(long double *)a;
+    long double val_b = *(long double *)b;
+    if (val_a < val_b) return -1;
+    if (val_a > val_b) return 1;
+    return 0;
+}
+static int parse_latency_percentiles(char *s, long double **latency_perc, size_t *n) {
+    const size_t ld_size   = sizeof(long double);
+    size_t current_number  = 0;
+    size_t max_number      = 4;
+    long double *perc_buf = zcalloc(max_number * ld_size);
+
+    char *comma_position = strchr(s, ',');
+    while (*s) {
+        if (comma_position) *comma_position = '\0';
+
+        if (strcmp(s, "") == 0) {
+            zfree(perc_buf);
+            return -1;
+        }
+
+        if (strcmp(s, "all") == 0) {
+            max_number = current_number + 100 + 1;
+            perc_buf = zrealloc(perc_buf, max_number * ld_size);
+            for (int i = 0; i < 100; i++)
+                perc_buf[current_number++] = (long double) i;
+        } else {
+            long double value;
+            if ((sscanf(s, "%Lf", &value)) < 1) {
+                zfree(perc_buf);
+                return -1;
+            }
+
+            if (value < 0.0 || value > 100.0) return -1;
+
+            perc_buf[current_number++] = value;
+
+            if (current_number == max_number) {
+                max_number *= 2;
+                perc_buf = zrealloc(perc_buf, max_number * ld_size);
+            }
+        }
+
+        if (comma_position) {
+            s = comma_position + 1;
+            comma_position = strchr(s, ',');
+        } else break;
+    }
+
+    perc_buf = zrealloc(perc_buf, current_number * ld_size);
+    qsort(perc_buf, current_number, ld_size, compare_long_doubles);
+    *latency_perc = perc_buf;
+    *n = current_number;
+
+    return 0;
+}
+
 static struct option longopts[] = {
-    { "connections", required_argument, NULL, 'c' },
-    { "duration",    required_argument, NULL, 'd' },
-    { "threads",     required_argument, NULL, 't' },
-    { "script",      required_argument, NULL, 's' },
-    { "header",      required_argument, NULL, 'H' },
-    { "latency",     no_argument,       NULL, 'L' },
-    { "timeout",     required_argument, NULL, 'T' },
-    { "help",        no_argument,       NULL, 'h' },
-    { "version",     no_argument,       NULL, 'v' },
-    { NULL,          0,                 NULL,  0  }
+    { "connections",         required_argument, NULL, 'c' },
+    { "duration",            required_argument, NULL, 'd' },
+    { "threads",             required_argument, NULL, 't' },
+    { "script",              required_argument, NULL, 's' },
+    { "header",              required_argument, NULL, 'H' },
+    { "latency",             no_argument,       NULL, 'L' },
+    { "latency-percentiles", required_argument, NULL, 'P' },
+    { "timeout",             required_argument, NULL, 'T' },
+    { "help",                no_argument,       NULL, 'h' },
+    { "version",             no_argument,       NULL, 'v' },
+    { NULL,                  0,                 NULL,  0  }
 };
+static long double default_latency_percentiles[] = { 50.0, 75.0, 90.0, 99.0 };
 
 static int parse_args(struct config *cfg, char **url, struct http_parser_url *parts, char **headers, int argc, char **argv) {
     char **header = headers;
@@ -486,7 +554,11 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    cfg->latency_percentiles        = default_latency_percentiles;
+    cfg->latency_percentiles_number = sizeof(default_latency_percentiles) / sizeof(long double);
+
+
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:P:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -505,6 +577,11 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'P':
+                if (parse_latency_percentiles(optarg, &cfg->latency_percentiles,
+                                              &cfg->latency_percentiles_number))
+                    return -1;
                 break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
@@ -569,13 +646,12 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
 
-static void print_stats_latency(stats *stats) {
-    long double percentiles[] = { 50.0, 75.0, 90.0, 99.0 };
+static void print_stats_latency(struct config *cfg, stats *stats) {
     printf("  Latency Distribution\n");
-    for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
-        long double p = percentiles[i];
+    for (size_t i = 0; i < cfg->latency_percentiles_number; i++) {
+        long double p = cfg->latency_percentiles[i];
         uint64_t n = stats_percentile(stats, p);
-        printf("%7.0Lf%%", p);
+        printf("%7.1Lf%%", p);
         print_units(n, format_time_us, 10);
         printf("\n");
     }
