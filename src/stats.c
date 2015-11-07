@@ -78,8 +78,8 @@ long double stats_within_stdev(stats *stats, long double mean, long double stdev
 }
 
 uint64_t stats_percentile(stats *stats, long double p) {
-    uint64_t rank = round((p / 100.0) * stats->count + 0.5);
-    uint64_t total = 0;
+    long double rank = (p / 100.0) * stats->count;
+    long double total = 0;
     for (uint64_t i = stats->min; i <= stats->max; i++) {
         total += stats->data[i];
         if (total >= rank) return i;
