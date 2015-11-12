@@ -29,29 +29,18 @@ int new_session_callback(SSL * ssl, SSL_SESSION * session){
     if(c && c->cache){
         if(c->cache->cached_session){
             SSL_SESSION_free(c->cache->cached_session);
-            SSL_SESSION * session = c->cache->cached_session;
-            printf("free %p %ld %ld %d\n",session,SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
+            //SSL_SESSION * session = c->cache->cached_session;
+            //printf("free %p %ld %ld %d\n",session,SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
             c->cache->cached_session=NULL;
         }
         c->cache->cached_session=session;
-        //CRYPTO_add(&session->references, 1, CRYPTO_LOCK_SSL_SESSION);
-        //SSL_SESSION_free(session);
-        //printf("insert %p %ld %ld %d\n",session,SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
     }
     return 1;
 }
 
 void ssl_info_callback(const SSL * ssl, int where, int ret){
-
-    /*
+    /* for debug
     if(where & SSL_CB_HANDSHAKE_START){
-        {
-            connection * c = SSL_get_ex_data(ssl,ssl_data_index);
-            SSL_SESSION * session = c->cache->cached_session;
-            if(session){
-                printf("before handshake %p %ld %ld %d\n",session,SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
-            }
-        }
 
         SSL_SESSION * session = SSL_get_session(ssl);
         if(session){
@@ -65,7 +54,7 @@ void ssl_info_callback(const SSL * ssl, int where, int ret){
         SSL_SESSION * session = SSL_get_session(ssl);
         printf("handshake done %p reused %ld %ld %ld %d\n",session,SSL_session_reused((SSL*)ssl),
                 SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
-        SSL_SESSION_print_fp(stdout,session);
+        //SSL_SESSION_print_fp(stdout,session);
     }
     */
 }
@@ -103,9 +92,6 @@ status ssl_connect(connection *c) {
     int r;
     if(SSL_get_fd(c->ssl)!=c->fd && c->cache && c->cache->cached_session){
         SSL_set_session(c->ssl,c->cache->cached_session);
-        //CRYPTO_add(&c->cache->cached_session->references, 1, CRYPTO_LOCK_SSL_SESSION);
-        //SSL_SESSION * session = c->cache->cached_session;
-        //printf("reuse %p %ld %ld %d\n",session,SSL_SESSION_get_time(session), SSL_SESSION_get_timeout(session),session->references);
     }
     SSL_set_fd(c->ssl, c->fd);
     if ((r = SSL_connect(c->ssl)) != 1) {

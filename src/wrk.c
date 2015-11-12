@@ -137,7 +137,8 @@ int main(int argc, char **argv) {
 
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    printf("  %"PRIu64" threads and %"PRIu64" connections. session reuse:%s, keep-alive:%s\n", cfg.threads, cfg.connections,
+            cfg.tls_session_reuse?"enabled":"disabled", cfg.no_keep_alive?"disabled":"enabled");
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -210,6 +211,8 @@ int main(int argc, char **argv) {
         script_done(L, statistics.latency, statistics.requests);
     }
 
+    stats_free(statistics.latency);
+    stats_free(statistics.requests);
     return 0;
 }
 

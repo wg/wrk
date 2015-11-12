@@ -25,7 +25,7 @@
 
 
 typedef struct {
-    SSL_SESSION * cached_session;
+    SSL_SESSION * cached_session; /* only cache 1 SSL_SESSION*/
 } tls_session_cache;
 
 
