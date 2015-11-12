@@ -23,6 +23,12 @@
 #define SOCKET_TIMEOUT_MS   2000
 #define RECORD_INTERVAL_MS  100
 
+
+typedef struct {
+    SSL_SESSION * cached_session; /* only cache 1 SSL_SESSION*/
+} tls_session_cache;
+
+
 typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
@@ -34,6 +40,7 @@ typedef struct {
     uint64_t start;
     lua_State *L;
     errors errors;
+    tls_session_cache cache;
     struct connection *cs;
 } thread;
 
@@ -51,6 +58,7 @@ typedef struct connection {
     } state;
     int fd;
     SSL *ssl;
+    tls_session_cache * cache;
     bool delayed;
     uint64_t start;
     char *request;
