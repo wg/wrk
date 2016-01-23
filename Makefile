@@ -1,4 +1,4 @@
-CFLAGS  := -std=c99 -Wall -O2 -D_REENTRANT
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 LIBS    := -lpthread -lm -lcrypto -lssl
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
@@ -26,8 +26,8 @@ OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
 
 LDIR     = deps/luajit/src
 LIBS    := -lluajit $(LIBS)
-CFLAGS  += -I$(LDIR)
-LDFLAGS += -L$(LDIR)
+CFLAGS  := -I$(LDIR) $(CFLAGS)
+LDFLAGS := -L$(LDIR) $(LDFLAGS)
 
 all: $(BIN)
 
@@ -55,6 +55,10 @@ $(ODIR)/%.o : %.c
 $(LDIR)/libluajit.a:
 	@echo Building LuaJIT...
 	@$(MAKE) -C $(LDIR) BUILDMODE=static
+
+install:
+	install -m 0755 -d  $(DESTDIR)$(PREFIX)/bin
+	install -m 0755 wrk $(DESTDIR)$(PREFIX)/bin
 
 .PHONY: all clean
 .SUFFIXES:
