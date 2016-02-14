@@ -57,6 +57,8 @@ static void usage() {
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
+char *host;
+
 int main(int argc, char **argv) {
     char *url, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
@@ -67,9 +69,10 @@ int main(int argc, char **argv) {
     }
 
     char *schema  = copy_url_part(url, &parts, UF_SCHEMA);
-    char *host    = copy_url_part(url, &parts, UF_HOST);
     char *port    = copy_url_part(url, &parts, UF_PORT);
     char *service = port ? port : schema;
+
+    host    = copy_url_part(url, &parts, UF_HOST);
 
     if (!strncmp("https", schema, 5)) {
         if ((cfg.ctx = ssl_init()) == NULL) {
@@ -77,6 +80,7 @@ int main(int argc, char **argv) {
             ERR_print_errors_fp(stderr);
             exit(1);
         }
+
         sock.connect  = ssl_connect;
         sock.close    = ssl_close;
         sock.read     = ssl_read;
@@ -359,7 +363,7 @@ static int response_complete(http_parser *parser) {
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
 
-    switch (sock.connect(c)) {
+    switch (sock.connect(c, host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
