@@ -23,7 +23,7 @@ static unsigned long ssl_id() {
     return (unsigned long) pthread_self();
 }
 
-SSL_CTX *ssl_init() {
+SSL_CTX *ssl_init(char *host) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
@@ -38,7 +38,7 @@ SSL_CTX *ssl_init() {
         CRYPTO_set_locking_callback(ssl_lock);
         CRYPTO_set_id_callback(ssl_id);
 
-        if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
+        if ((ctx = SSL_CTX_new(TLSv1_2_client_method()))) {
             SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
             SSL_CTX_set_verify_depth(ctx, 0);
             SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
@@ -49,9 +49,17 @@ SSL_CTX *ssl_init() {
     return ctx;
 }
 
-status ssl_connect(connection *c) {
+status ssl_connect(connection *c, char *host) {
     int r;
+
+    if (host != NULL) {
+      if (!SSL_set_tlsext_host_name(c->ssl, host)) {
+        exit(1);
+      }
+    }
+
     SSL_set_fd(c->ssl, c->fd);
+
     if ((r = SSL_connect(c->ssl)) != 1) {
         switch (SSL_get_error(c->ssl, r)) {
             case SSL_ERROR_WANT_READ:  return RETRY;
