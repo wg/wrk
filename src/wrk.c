@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+		bool		 silent;
     char    *script;
     SSL_CTX *ctx;
 } cfg;
@@ -51,7 +52,8 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
-           "    -v, --version          Print version details      \n"
+					 "    -v, --version          Print version details      \n"
+					 "    -S, --silent           Require script for results \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
@@ -110,6 +112,7 @@ int main(int argc, char **argv) {
             cfg.pipeline = script_verify_request(t->L);
             cfg.dynamic  = !script_is_static(t->L);
             cfg.delay    = script_has_delay(t->L);
+						cfg.silent   = script_is_silent(t->L);
             if (script_want_response(t->L)) {
                 parser_settings.on_header_field = header_field;
                 parser_settings.on_header_value = header_value;
@@ -132,8 +135,11 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &sa, NULL);
 
     char *time = format_time_s(cfg.duration);
-    printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+
+		if (!cfg.silent) {
+		    printf("Running %s test @ %s\n", time, url);
+		    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+		}
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -167,25 +173,31 @@ int main(int argc, char **argv) {
         stats_correct(statistics.latency, interval);
     }
 
-    print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
-    if (cfg.latency) print_stats_latency(statistics.latency);
+		if (!cfg.silent) {
+			print_stats_header();
+			print_stats("Latency", statistics.latency, format_time_us);
+			print_stats("Req/Sec", statistics.requests, format_metric);
+			if (cfg.latency) print_stats_latency(statistics.latency);
+		}
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
-    if (errors.connect || errors.read || errors.write || errors.timeout) {
-        printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
-               errors.connect, errors.read, errors.write, errors.timeout);
-    }
+		if (!cfg.silent) {
+    	printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+   		if (errors.connect || errors.read || errors.write || errors.timeout) {
+      	printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
+				errors.connect, errors.read, errors.write, errors.timeout);
+   		}
+		}
 
-    if (errors.status) {
-        printf("  Non-2xx or 3xx responses: %d\n", errors.status);
-    }
+		if (!cfg.silent) {
+			if (errors.status) {
+				printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+			}
 
-    printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+			printf("Requests/sec: %9.2Lf\n", req_per_s);
+			printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+		}
 
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
@@ -473,6 +485,7 @@ static struct option longopts[] = {
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
+		{ "silent",      no_argument,       NULL, 'S' },
     { NULL,          0,                 NULL,  0  }
 };
 
@@ -482,6 +495,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
 
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
+		cfg->silent			 = false;
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
@@ -506,10 +520,13 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'L':
                 cfg->latency = true;
                 break;
-            case 'T':
-                if (scan_time(optarg, &cfg->timeout)) return -1;
-                cfg->timeout *= 1000;
+            case 'S':
+                cfg->silent = true;
                 break;
+						case 'T':
+               if (scan_time(optarg, &cfg->timeout)) return -1;
+               cfg->timeout *= 1000;
+               break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");

@@ -22,6 +22,7 @@ void script_response(lua_State *, int, buffer *, buffer *);
 size_t script_verify_request(lua_State *L);
 
 bool script_is_static(lua_State *);
+bool script_is_silent(lua_State *);
 bool script_want_response(lua_State *L);
 bool script_has_delay(lua_State *L);
 bool script_has_done(lua_State *L);
