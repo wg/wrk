@@ -16,7 +16,7 @@
 #include "ae.h"
 #include "http_parser.h"
 
-#define VERSION  "4.0.0"
+#define VERSION  "4.0.2-SNAPSHOT"
 #define RECVBUF  8192
 
 #define MAX_THREAD_RATE_S   10000000
