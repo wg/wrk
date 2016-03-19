@@ -91,6 +91,36 @@ err:
     return NULL;
 }
 
+/* Return the current set size. */
+int aeGetSetSize(aeEventLoop *eventLoop) {
+    return eventLoop->setsize;
+}
+
+/* Resize the maximum set size of the event loop.
+ * If the requested set size is smaller than the current set size, but
+ * there is already a file descriptor in use that is >= the requested
+ * set size minus one, AE_ERR is returned and the operation is not
+ * performed at all.
+ *
+ * Otherwise AE_OK is returned and the operation is successful. */
+int aeResizeSetSize(aeEventLoop *eventLoop, int setsize) {
+    int i;
+
+    if (setsize == eventLoop->setsize) return AE_OK;
+    if (eventLoop->maxfd >= setsize) return AE_ERR;
+    if (aeApiResize(eventLoop,setsize) == -1) return AE_ERR;
+
+    eventLoop->events = zrealloc(eventLoop->events,sizeof(aeFileEvent)*setsize);
+    eventLoop->fired = zrealloc(eventLoop->fired,sizeof(aeFiredEvent)*setsize);
+    eventLoop->setsize = setsize;
+
+    /* Make sure that if we created new slots, they are initialized with
+     * an AE_NONE mask. */
+    for (i = eventLoop->maxfd+1; i < setsize; i++)
+        eventLoop->events[i].mask = AE_NONE;
+    return AE_OK;
+}
+
 void aeDeleteEventLoop(aeEventLoop *eventLoop) {
     aeApiFree(eventLoop);
     zfree(eventLoop->events);
@@ -126,8 +156,9 @@ void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
 {
     if (fd >= eventLoop->setsize) return;
     aeFileEvent *fe = &eventLoop->events[fd];
-
     if (fe->mask == AE_NONE) return;
+
+    aeApiDelEvent(eventLoop, fd, mask);
     fe->mask = fe->mask & (~mask);
     if (fd == eventLoop->maxfd && fe->mask == AE_NONE) {
         /* Update the max fd */
@@ -137,7 +168,6 @@ void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
             if (eventLoop->events[j].mask != AE_NONE) break;
         eventLoop->maxfd = j;
     }
-    aeApiDelEvent(eventLoop, fd, mask);
 }
 
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd) {
@@ -309,7 +339,7 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
 /* Process every pending time event, then every pending file event
  * (that may be registered by time event callbacks just processed).
  * Without special flags the function sleeps until some file event
- * fires, or when the next time event occurrs (if any).
+ * fires, or when the next time event occurs (if any).
  *
  * If flags is 0, the function does nothing and returns.
  * if flags has AE_ALL_EVENTS set, all the kind of events are processed.
@@ -356,7 +386,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             if (tvp->tv_usec < 0) tvp->tv_usec = 0;
         } else {
             /* If we have to check for events but need to return
-             * ASAP because of AE_DONT_WAIT we need to se the timeout
+             * ASAP because of AE_DONT_WAIT we need to set the timeout
              * to zero */
             if (flags & AE_DONT_WAIT) {
                 tv.tv_sec = tv.tv_usec = 0;
@@ -395,7 +425,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
     return processed; /* return the number of processed file/time events */
 }
 
-/* Wait for millseconds until the given file descriptor becomes
+/* Wait for milliseconds until the given file descriptor becomes
  * writable/readable/exception */
 int aeWait(int fd, int mask, long long milliseconds) {
     struct pollfd pfd;
