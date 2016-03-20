@@ -20,9 +20,10 @@ endif
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
 		ae.c zmalloc.c http_parser.c
 BIN  := wrk
+VER  ?= $(shell git describe --tags --always --dirty)
 
 ODIR := obj
-OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
+OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
 LIBS := -lluajit-5.1 $(LIBS)
 
 DEPS    :=
@@ -61,6 +62,9 @@ $(ODIR)/bytecode.o: src/wrk.lua
 	@echo LUAJIT $<
 	@$(SHELL) -c 'PATH=obj/bin:$(PATH) luajit -b $(CURDIR)/$< $(CURDIR)/$@'
 
+$(ODIR)/version.o:
+	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
+
 $(ODIR)/%.o : %.c
 	@echo CC $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
@@ -94,6 +98,8 @@ endif
 # ------------
 
 .PHONY: all clean
+.PHONY: $(ODIR)/version.o
+
 .SUFFIXES:
 .SUFFIXES: .c .o .lua
 
