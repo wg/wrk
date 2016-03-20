@@ -1,5 +1,5 @@
 CFLAGS  := -std=c99 -Wall -O2 -D_REENTRANT
-LIBS    := -lpthread -lm -lcrypto -lssl
+LIBS    := -lpthread -lm -lssl -lcrypto
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
@@ -24,37 +24,60 @@ BIN  := wrk
 ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
 
-LDIR     = deps/luajit/src
-LIBS    := -lluajit $(LIBS)
-CFLAGS  += -I$(LDIR)
-LDFLAGS += -L$(LDIR)
+LIBS    := -lluajit-5.1 $(LIBS)
+CFLAGS  += -I$(ODIR)/include
+LDFLAGS += -L$(ODIR)/lib
+DEPS    := $(ODIR)/lib/libluajit-5.1.a $(ODIR)/lib/libssl.a
 
 all: $(BIN)
 
 clean:
-	$(RM) $(BIN) obj/*
-	@$(MAKE) -C deps/luajit clean
+	$(RM) -rf $(BIN) obj/*
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
 	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-$(OBJ): config.h Makefile $(LDIR)/libluajit.a | $(ODIR)
+$(OBJ): config.h Makefile $(DEPS) | $(ODIR)
 
 $(ODIR):
 	@mkdir -p $@
 
 $(ODIR)/bytecode.o: src/wrk.lua
 	@echo LUAJIT $<
-	@$(SHELL) -c 'cd $(LDIR) && ./luajit -b $(CURDIR)/$< $(CURDIR)/$@'
+	@$(SHELL) -c 'obj/bin/luajit -b $(CURDIR)/$< $(CURDIR)/$@'
 
 $(ODIR)/%.o : %.c
 	@echo CC $<
 	@$(CC) $(CFLAGS) -c -o $@ $<
 
-$(LDIR)/libluajit.a:
+# Dependencies
+
+LUAJIT  := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/LuaJIT*.tar.gz)))
+OPENSSL := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/openssl*.tar.gz)))
+
+OPENSSL_OPTS = no-shared no-ssl2 no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
+
+$(ODIR)/$(LUAJIT):  deps/$(LUAJIT).tar.gz  | $(ODIR)
+	@tar -C $(ODIR) -xf $<
+
+$(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
+	@tar -C $(ODIR) -xf $<
+
+$(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
-	@$(MAKE) -C $(LDIR) BUILDMODE=static
+	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
+
+$(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
+	@echo Building OpenSSL...
+ifeq ($(TARGET), darwin)
+	@$(SHELL) -c "cd $< && ./Configure $(OPENSSL_OPTS) darwin64-x86_64-cc"
+else
+	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
+endif
+	@$(MAKE) -C $< depend install
+
+# ------------
 
 .PHONY: all clean
 .SUFFIXES:
