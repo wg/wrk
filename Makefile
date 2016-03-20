@@ -1,4 +1,4 @@
-CFLAGS  := -std=c99 -Wall -O2 -D_REENTRANT
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 LIBS    := -lpthread -lm -lssl -lcrypto
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
@@ -23,11 +23,25 @@ BIN  := wrk
 
 ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o
+LIBS := -lluajit-5.1 $(LIBS)
 
-LIBS    := -lluajit-5.1 $(LIBS)
+DEPS    :=
 CFLAGS  += -I$(ODIR)/include
 LDFLAGS += -L$(ODIR)/lib
-DEPS    := $(ODIR)/lib/libluajit-5.1.a $(ODIR)/lib/libssl.a
+
+ifneq ($(WITH_LUAJIT),)
+	CFLAGS  += -I$(WITH_LUAJIT)/include
+	LDFLAGS += -L$(WITH_LUAJIT)/lib
+else
+	DEPS += $(ODIR)/lib/libluajit-5.1.a
+endif
+
+ifneq ($(WITH_OPENSSL),)
+	CFLAGS  += -I$(WITH_OPENSSL)/include
+	LDFLAGS += -L$(WITH_OPENSSL)/lib
+else
+	DEPS += $(ODIR)/lib/libssl.a
+endif
 
 all: $(BIN)
 
@@ -45,7 +59,7 @@ $(ODIR):
 
 $(ODIR)/bytecode.o: src/wrk.lua
 	@echo LUAJIT $<
-	@$(SHELL) -c 'obj/bin/luajit -b $(CURDIR)/$< $(CURDIR)/$@'
+	@$(SHELL) -c 'PATH=obj/bin:$(PATH) luajit -b $(CURDIR)/$< $(CURDIR)/$@'
 
 $(ODIR)/%.o : %.c
 	@echo CC $<
