@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    char    *host;
     char    *script;
     SSL_CTX *ctx;
 } cfg;
@@ -97,6 +98,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
         exit(1);
     }
+
+    cfg.host = host;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t      = &threads[i];
@@ -359,7 +362,7 @@ static int response_complete(http_parser *parser) {
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
 
-    switch (sock.connect(c)) {
+    switch (sock.connect(c, cfg.host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;

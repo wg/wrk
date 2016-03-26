@@ -1,3 +1,8 @@
+wrk 4.0.2
+
+ * Send hostname using TLS SNI.
+ * Add optional WITH_OPENSSL and WITH_LUAJIT to use system libs.
+ * Bundle OpenSSL 1.0.2.
  * delay() can return milliseconds to delay sending next request.
 
 wrk 4.0.0

@@ -1,0 +1,29 @@
+Overview
+
+  wrk should build on most UNIX-like operating systems and
+  architectures that have GNU make and are supported by LuaJIT and
+  OpenSSL. Some systems may require additional CFLAGS or LDFLAGS,
+  see the top of the Makefile for examples
+
+  In many cases simply running `make` (often `gmake` on *BSD) will
+  do the trick.
+
+Dependencies
+
+  wrk requires LuaJIT and OpenSSL and is distributed with appropriate
+  versions that will be unpacked and built as necessary.
+
+  If you are building wrk packages for an OS distribution or otherwise
+  prefer to use system versions of dependencies you may specify their
+  location when invoking make with one or more of:
+
+    WITH_LUAJIT
+    WITH_OPENSSL
+
+  For example to use the system version of both libraries on Linux:
+
+    make WITH_LUAJIT=/usr WITH_OPENSSL=/usr
+
+  Or to use the Homebrew version of OpenSSL on Mac OS X:
+
+    make WITH_OPENSSL=/usr/local/opt/openssl
