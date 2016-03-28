@@ -57,6 +57,7 @@ typedef void aeFileProc(struct aeEventLoop *eventLoop, int fd, void *clientData,
 typedef int aeTimeProc(struct aeEventLoop *eventLoop, long long id, void *clientData);
 typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop, void *clientData);
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
+typedef int aeCheckThreadStopProc(struct aeEventLoop *eventLoop);
 
 /* File event structure */
 typedef struct aeFileEvent {
@@ -95,6 +96,8 @@ typedef struct aeEventLoop {
     int stop;
     void *apidata; /* This is used for polling API specific data */
     aeBeforeSleepProc *beforesleep;
+    aeCheckThreadStopProc *checkThreadStop;
+    void *checkThreadStopData;
 } aeEventLoop;
 
 /* Prototypes */
@@ -114,5 +117,7 @@ int aeWait(int fd, int mask, long long milliseconds);
 void aeMain(aeEventLoop *eventLoop);
 char *aeGetApiName(void);
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep);
+void aeSetCheckThreadStopProc(aeEventLoop *eventLoop,
+        aeCheckThreadStopProc *checkThreadStop, void *checkData);
 
 #endif
