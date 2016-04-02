@@ -120,14 +120,15 @@ int main(int argc, char **argv) {
         }
 
         t->connections = cfg.connections / cfg.threads;
-        t->complete_stop = cfg.requests / cfg.threads;
-        if (i == (cfg.threads - 1))
-            t->complete_stop += (cfg.requests % cfg.threads);
-
         t->L = script_create(cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
 
-        aeSetCheckThreadStopProc(t->loop, aeCheckThreadStop, (void *)t);
+        if (cfg.requests > 0) {
+            t->complete_stop = cfg.requests / cfg.threads;
+            if (i == (cfg.threads - 1))
+                t->complete_stop += (cfg.requests % cfg.threads);
+            aeSetCheckThreadStopProc(t->loop, aeCheckThreadStop, (void *)t);
+        }
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
