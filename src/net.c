@@ -15,9 +15,15 @@ status sock_close(connection *c) {
 }
 
 status sock_read(connection *c, size_t *n) {
-    ssize_t r = read(c->fd, c->buf, sizeof(c->buf));
+    ssize_t r;
+    if ((r = read(c->fd, c->buf, sizeof(c->buf)) == -1) {
+        switch (errno) {
+            case EAGAIN: return RETRY;
+            default:     return ERROR;
+        }
+    }
     *n = (size_t) r;
-    return r >= 0 ? OK : ERROR;
+    return OK;
 }
 
 status sock_write(connection *c, char *buf, size_t len, size_t *n) {
