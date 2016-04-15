@@ -93,7 +93,9 @@ ifeq ($(TARGET), darwin)
 else
 	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
 endif
-	@$(MAKE) -C $< depend install
+	@$(MAKE) -C $< depend
+	@$(MAKE) -C $<
+	@$(MAKE) -C $< install
 
 # ------------
 
