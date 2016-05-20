@@ -15,6 +15,7 @@ static struct config {
     bool     latency;
     char    *host;
     char    *script;
+    char    *ciphers
     SSL_CTX *ctx;
 } cfg;
 
@@ -49,6 +50,7 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
+           "    -z, --ciphers     <S>  Specify SSL/TLS ciphers    \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
@@ -78,6 +80,15 @@ int main(int argc, char **argv) {
             ERR_print_errors_fp(stderr);
             exit(1);
         }
+
+        if (NULL != cfg.ciphers) {
+            if (ssl_set_cipher_list(cfg.ctx, cfg.ciphers) == ERROR) {
+                fprintf(stderr, "unable to set SSL ciphers: %s\n", cfg.ciphers);
+                ERR_print_errors_fp(stderr);
+                exit(1);
+            }
+        }
+
         sock.connect  = ssl_connect;
         sock.close    = ssl_close;
         sock.read     = ssl_read;
@@ -471,6 +482,7 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
+    { "ciphers",     required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
@@ -489,7 +501,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:z:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -502,6 +514,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 's':
                 cfg->script = optarg;
+                break;
+            case 'z':
+                cfg->ciphers = optarg;
                 break;
             case 'H':
                 *header++ = optarg;
