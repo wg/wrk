@@ -15,7 +15,7 @@ static struct config {
     bool     latency;
     char    *host;
     char    *script;
-    char    *ciphers
+    char    *ciphers;
     SSL_CTX *ctx;
 } cfg;
 
