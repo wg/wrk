@@ -1,5 +1,6 @@
 // Copyright (C) 2013 - Will Glozer.  All rights reserved.
 
+#include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -7,7 +8,10 @@
 #include "net.h"
 
 status sock_connect(connection *c, char *host) {
-    return OK;
+    int err = 0;
+    socklen_t len = sizeof(err);
+    getsockopt(c->fd, SOL_SOCKET, SO_ERROR, &err, &len);
+    return err == 0 ? OK : ERROR;
 }
 
 status sock_close(connection *c) {
