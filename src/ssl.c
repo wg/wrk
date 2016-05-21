@@ -5,6 +5,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include "zmalloc.h"
 
 #include "ssl.h"
 
@@ -23,7 +24,7 @@ static unsigned long ssl_id() {
     return (unsigned long) pthread_self();
 }
 
-SSL_CTX *ssl_init() {
+SSL_CTX *ssl_init(char* ssl_cert) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
@@ -43,6 +44,104 @@ SSL_CTX *ssl_init() {
             SSL_CTX_set_verify_depth(ctx, 0);
             SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
             SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+	    if(ssl_cert) {
+		FILE *fp;
+		long file_size;
+		char *buffer;
+		fp = fopen (ssl_cert , "rb");
+		if(!fp) {
+			fprintf(stderr, "can't open cert file\n");
+			return 0L;
+		}
+
+		fseek(fp , 0L , SEEK_END);
+		file_size = ftell(fp);
+		rewind( fp );
+		printf("file size: %ld\n",file_size);
+		buffer = zmalloc(file_size + 1);
+		if(!buffer) {
+			fprintf(stderr, "can't create buffer\n");
+			fclose(fp);
+			free(buffer);
+			return 0L;
+		}
+		if(fread(buffer, file_size, 1, fp) != 1 ) {
+			fprintf(stderr, "can't read cert file\n");
+			fclose(fp);
+			free(buffer);
+			return 0L;
+		}
+		fclose(fp);
+
+		char * kstart = strstr(buffer, "RSA P");
+		if (kstart == 0L) {
+			return 0L;
+		}
+
+    		kstart -= 11;
+		unsigned int cert_len = (kstart - buffer);
+
+		char* cert_txt = zmalloc(cert_len+1);
+		strncpy(cert_txt, buffer, cert_len);
+		cert_txt[cert_len] = '\0';
+		char* key = kstart;
+
+		X509 *cert = NULL;
+		RSA *rsa = NULL;
+                BIO *bio;
+		BIO *kbio = NULL;
+
+		bio = BIO_new_mem_buf(cert_txt, -1);
+		if(bio == NULL) {
+			fprintf(stderr, "BIO_new_mem_buf failed\n");
+			return 0L;
+		}
+
+		cert = PEM_read_bio_X509(bio, NULL, 0, NULL);
+		if(cert == NULL) {
+			fprintf(stderr, "PEM_read_bio_X509 failed\n");
+			return 0L;
+		}
+
+		int ret = SSL_CTX_use_certificate(ctx, cert);
+		if(ret != 1) {
+			fprintf(stderr, "can't use certificate\n");
+			return 0L;
+		}
+
+		kbio = BIO_new_mem_buf(key, -1);
+		if(kbio == NULL) {
+			fprintf(stderr, "BIO_new_mem_buf failed\n");
+			return 0L;
+		}
+
+		rsa = PEM_read_bio_RSAPrivateKey(kbio, NULL, 0, NULL);
+		if(rsa == NULL) {
+			fprintf(stderr, "PEM_read_bio_RSAPrivateKey failed\n");
+    		}
+
+
+		ret = SSL_CTX_use_RSAPrivateKey(ctx, rsa);
+		if(ret != 1) {
+			fprintf(stderr, "SSL_CTX_use_RSAPrivateKey failed\n");
+			return 0L;
+		}
+
+		if(bio)
+			BIO_free(bio);
+
+		if(kbio)
+			BIO_free(kbio);
+
+		if(rsa)
+			RSA_free(rsa);
+
+		if(cert)
+			X509_free(cert);
+
+		zfree(buffer);
+
+	    }
         }
     }
 

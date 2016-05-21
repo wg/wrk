@@ -15,6 +15,7 @@ static struct config {
     bool     latency;
     char    *host;
     char    *script;
+    char    *ssl_cert;
     SSL_CTX *ctx;
 } cfg;
 
@@ -52,6 +53,7 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
+           "    -C, --cert        <S>  SSL Certificate File (PEM) \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -73,7 +75,7 @@ int main(int argc, char **argv) {
     char *service = port ? port : schema;
 
     if (!strncmp("https", schema, 5)) {
-        if ((cfg.ctx = ssl_init()) == NULL) {
+        if ((cfg.ctx = ssl_init(cfg.ssl_cert)) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
             exit(1);
@@ -474,6 +476,7 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "cert",        optional_argument, NULL, 'C' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -489,7 +492,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:C:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -512,6 +515,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
+                break;
+            case 'C':
+                cfg->ssl_cert = optarg;
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
