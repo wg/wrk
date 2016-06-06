@@ -657,6 +657,7 @@ size_t http_parser_execute (http_parser *parser,
       case s_start_req_or_res:
       case s_start_res:
       case s_start_req:
+      case s_message_done:
         return 0;
 
       default:
@@ -1886,35 +1887,23 @@ size_t http_parser_execute (http_parser *parser,
         parser->content_length -= to_read;
         p += to_read - 1;
 
-        if (parser->content_length == 0) {
-          UPDATE_STATE(s_message_done);
+        if (parser->content_length > 0)
+          break;
 
-          /* Mimic CALLBACK_DATA_NOADVANCE() but with one extra byte.
-           *
-           * The alternative to doing this is to wait for the next byte to
-           * trigger the data callback, just as in every other case. The
-           * problem with this is that this makes it difficult for the test
-           * harness to distinguish between complete-on-EOF and
-           * complete-on-length. It's not clear that this distinction is
-           * important for applications, but let's keep it for now.
-           */
-          CALLBACK_DATA_(body, p - body_mark + 1, p - data);
-          REEXECUTE();
-        }
-
-        break;
+        /* Fall through */
       }
+
+      case s_message_done:
+        CALLBACK_NOTIFY(message_complete);
+        UPDATE_STATE(s_message_done);
+        RETURN(len);
+        break;
 
       /* read until EOF */
       case s_body_identity_eof:
         MARK(body);
         p = data + len - 1;
 
-        break;
-
-      case s_message_done:
-        UPDATE_STATE(NEW_MESSAGE());
-        CALLBACK_NOTIFY(message_complete);
         break;
 
       case s_chunk_size_start:
