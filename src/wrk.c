@@ -1,5 +1,7 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
+#include <openssl/conf.h>
+
 #include "wrk.h"
 #include "script.h"
 #include "main.h"
@@ -59,6 +61,9 @@ static void usage() {
 }
 
 int main(int argc, char **argv) {
+    
+    OPENSSL_config(NULL);
+    
     char *url, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
 
