@@ -10,18 +10,19 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <lua.h>
+#include <luajit-2.0/lua.h>
 
 #include "stats.h"
 #include "ae.h"
 #include "http_parser.h"
 
-#define VERSION  "4.0.0"
 #define RECVBUF  8192
 
 #define MAX_THREAD_RATE_S   10000000
 #define SOCKET_TIMEOUT_MS   2000
 #define RECORD_INTERVAL_MS  100
+
+extern const char *VERSION;
 
 typedef struct {
     pthread_t thread;
