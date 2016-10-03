@@ -10,6 +10,7 @@ static struct config {
     uint64_t threads;
     uint64_t timeout;
     uint64_t pipeline;
+    uint64_t interval;
     bool     delay;
     bool     dynamic;
     bool     latency;
@@ -47,6 +48,7 @@ static void usage() {
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
+           "    -i, --interval    <T>  Throughput reporting interval \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
@@ -143,7 +145,34 @@ int main(int argc, char **argv) {
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
-    sleep(cfg.duration);
+    uint64_t sleepTime = 0;
+    uint64_t totalTime = 0;
+    uint64_t totalReqs = 0;
+    uint64_t currentReqs = 0;
+    uint64_t intervalReqs = 0;
+    long double intervalRPS = 0;
+    // Report periodic throughput
+    if (cfg.interval > 0) {
+        while (totalTime < cfg.duration && stop == 0) {
+            sleepTime = cfg.interval;
+            if (totalTime + sleepTime > cfg.duration) {
+                sleepTime = totalTime + cfg.interval - cfg.duration;
+            }
+            totalTime += sleepTime;
+            sleep(sleepTime);
+            currentReqs = 0;
+            for (uint64_t i = 0; i < cfg.threads; i++) {
+                thread *t = &threads[i];
+                currentReqs += t->complete;
+            }
+            intervalReqs = currentReqs - totalReqs;
+            totalReqs = currentReqs;
+            intervalRPS = intervalReqs / sleepTime;
+            printf("%4llus: %llu requests in last %llus (%9.1Lf req/sec)\n", totalTime, intervalReqs, sleepTime, intervalRPS);
+        }
+    } else {
+        sleep(cfg.duration);
+    }
     stop = 1;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
@@ -469,6 +498,7 @@ static char *copy_url_part(char *url, struct http_parser_url *parts, enum http_p
 static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "duration",    required_argument, NULL, 'd' },
+    { "interval",    required_argument, NULL, 'i' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
@@ -488,8 +518,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->interval    = 0;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:i:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -499,6 +530,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'd':
                 if (scan_time(optarg, &cfg->duration)) return -1;
+                break;
+            case 'i':
+                if (scan_time(optarg, &cfg->interval)) return -1;
                 break;
             case 's':
                 cfg->script = optarg;
