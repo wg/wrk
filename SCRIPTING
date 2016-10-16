@@ -106,6 +106,7 @@ Done
   summary = {
     duration = N,  -- run duration in microseconds
     requests = N,  -- total completed requests
+    connects = N,  -- total connection attempts
     bytes    = N,  -- total bytes received
     errors   = {
       connect = N, -- total socket connection errors

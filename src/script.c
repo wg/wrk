@@ -209,10 +209,11 @@ void script_header_done(lua_State *L, luaL_Buffer *buffer) {
     luaL_pushresult(buffer);
 }
 
-void script_summary(lua_State *L, uint64_t duration, uint64_t requests, uint64_t bytes) {
+void script_summary(lua_State *L, uint64_t duration, uint64_t requests, uint64_t bytes, uint64_t connects) {
     const table_field fields[] = {
         { "duration", LUA_TNUMBER, &duration },
         { "requests", LUA_TNUMBER, &requests },
+        { "connects", LUA_TNUMBER, &connects },
         { "bytes",    LUA_TNUMBER, &bytes    },
         { NULL,       0,           NULL      },
     };
