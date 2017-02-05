@@ -433,6 +433,9 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
             case ERROR: goto error;
             case RETRY: return;
         }
+        /* Remote side closed connection */
+        if (n == 0)
+            goto reconnect;
 
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
         if (n == 0 && !http_body_is_final(&c->parser)) goto error;
@@ -444,6 +447,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   error:
     c->thread->errors.read++;
+  reconnect:
     reconnect_socket(c->thread, c);
 }
 
