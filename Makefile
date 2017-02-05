@@ -74,7 +74,7 @@ $(ODIR)/%.o : %.c
 LUAJIT  := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/LuaJIT*.tar.gz)))
 OPENSSL := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/openssl*.tar.gz)))
 
-OPENSSL_OPTS = no-shared no-ssl2 no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
+OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
 
 $(ODIR)/$(LUAJIT):  deps/$(LUAJIT).tar.gz  | $(ODIR)
 	@tar -C $(ODIR) -xf $<
@@ -93,7 +93,10 @@ ifeq ($(TARGET), darwin)
 else
 	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
 endif
-	@$(MAKE) -C $< depend install
+	@$(MAKE) -C $< depend
+	@$(MAKE) -C $<
+	@$(MAKE) -C $< install_sw
+	@touch $@
 
 # ------------
 
