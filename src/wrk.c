@@ -8,6 +8,7 @@ static struct config {
     uint64_t connections;
     uint64_t duration;
     uint64_t threads;
+    uint64_t requests;
     uint64_t timeout;
     uint64_t pipeline;
     bool     delay;
@@ -41,12 +42,20 @@ static void handler(int sig) {
     stop = 1;
 }
 
+static int aeCheckThreadStop(struct aeEventLoop *eventLoop) {
+    thread *t = (thread *)eventLoop->checkThreadStopData;
+    if (t->complete == t->complete_stop)
+        return 1;
+    return 0;
+}
+
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
+           "    -r, --requests    <N>  Number of requests to limit\n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
@@ -102,12 +111,24 @@ int main(int argc, char **argv) {
     cfg.host = host;
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
-        thread *t      = &threads[i];
-        t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
-        t->connections = cfg.connections / cfg.threads;
+        thread *t = &threads[i];
+        t->loop = aeCreateEventLoop(10 + cfg.connections * 3);
+        if (t->loop == NULL) {
+            char *msg = strerror(errno);
+            fprintf(stderr, "unable to create ae eventloop: %s\n", msg);
+            exit(2);
+        }
 
+        t->connections = cfg.connections / cfg.threads;
         t->L = script_create(cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
+
+        if (cfg.requests > 0) {
+            t->complete_stop = cfg.requests / cfg.threads;
+            if (i == (cfg.threads - 1))
+                t->complete_stop += (cfg.requests % cfg.threads);
+            aeSetCheckThreadStopProc(t->loop, aeCheckThreadStop, (void *)t);
+        }
 
         if (i == 0) {
             cfg.pipeline = script_verify_request(t->L);
@@ -120,7 +141,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
+        if (pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
             fprintf(stderr, "unable to create thread %"PRIu64": %s\n", i, msg);
             exit(2);
@@ -143,8 +164,10 @@ int main(int argc, char **argv) {
     uint64_t bytes    = 0;
     errors errors     = { 0 };
 
-    sleep(cfg.duration);
-    stop = 1;
+    if (cfg.duration > 0) {
+        sleep(cfg.duration);
+        stop = 1;
+    }
 
     for (uint64_t i = 0; i < cfg.threads; i++) {
         thread *t = &threads[i];
@@ -470,6 +493,7 @@ static struct option longopts[] = {
     { "connections", required_argument, NULL, 'c' },
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
+    { "requests",    required_argument, NULL, 'r' },
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
@@ -486,16 +510,20 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     memset(cfg, 0, sizeof(struct config));
     cfg->threads     = 2;
     cfg->connections = 10;
+    cfg->requests    = 0;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:r:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
                 break;
             case 'c':
                 if (scan_metric(optarg, &cfg->connections)) return -1;
+                break;
+            case 'r':
+                if (scan_metric(optarg, &cfg->requests)) return -1;
                 break;
             case 'd':
                 if (scan_time(optarg, &cfg->duration)) return -1;
@@ -536,6 +564,12 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
         fprintf(stderr, "number of connections must be >= threads\n");
         return -1;
     }
+
+    if (cfg->requests > 0)
+        cfg->duration = 0;
+
+    if (cfg->requests > 0 && cfg->requests < cfg->threads)
+        cfg->threads = cfg->requests;
 
     *url    = argv[optind];
     *header = NULL;
