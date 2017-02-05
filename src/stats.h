@@ -6,12 +6,16 @@
 
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#define BETWEEN(X, A, B) ((X >= A) && (X <= B))
 
 typedef struct {
     uint32_t connect;
     uint32_t read;
     uint32_t write;
     uint32_t status;
+    uint32_t status_3xx;
+    uint32_t status_4xx;
+    uint32_t status_5xx;
     uint32_t timeout;
 } errors;
 
