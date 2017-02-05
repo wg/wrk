@@ -33,8 +33,10 @@ LDFLAGS += -L$(ODIR)/lib
 ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
 	LDFLAGS += -L$(WITH_LUAJIT)/lib
+	LUA_PATH = $(WITH_LUAJIT)/share/luajit-2.0.4/?.lua
 else
 	DEPS += $(ODIR)/lib/libluajit-5.1.a
+	LUA_PATH = $(ODIR)/LuaJIT-2.0.4/src/?.lua
 endif
 
 ifneq ($(WITH_OPENSSL),)
