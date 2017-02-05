@@ -54,7 +54,7 @@ static void usage() {
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
-           "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
+           "  Numeric arguments may include an SI unit (1k, 1M, 1G)\n"
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
