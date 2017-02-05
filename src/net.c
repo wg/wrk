@@ -4,6 +4,11 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 
+/* On Solaris-based platforms, FIONREAD is defined in sys/filio.h */
+#if defined (__SVR4) && defined (__sun)
+#include <sys/filio.h>
+#endif
+
 #include "net.h"
 
 status sock_connect(connection *c, char *host) {
