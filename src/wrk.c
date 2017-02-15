@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
             intervalReqs = currentReqs - totalReqs;
             totalReqs = currentReqs;
             intervalRPS = intervalReqs / sleepTime;
-            printf("%4llus: %llu requests in last %llus (%9.1Lf req/sec)\n", totalTime, intervalReqs, sleepTime, intervalRPS);
+            printf("%4"PRIu64"s: %"PRIu64" requests in last %"PRIu64"s (%9.1Lf req/sec)\n", totalTime, intervalReqs, sleepTime, intervalRPS);
         }
     } else {
         sleep(cfg.duration);
