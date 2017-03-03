@@ -16,6 +16,7 @@ static struct config {
     char    *host;
     char    *script;
     SSL_CTX *ctx;
+    cidr_range bind_range;
 } cfg;
 
 static struct {
@@ -41,12 +42,18 @@ static void handler(int sig) {
     stop = 1;
 }
 
+#ifdef HAS_IP_BIND_ADDRESS_NO_PORT
+int try_ip_bind_address_no_port = 1;
+#endif
+
 static void usage() {
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
            "    -t, --threads     <N>  Number of threads to use   \n"
+           "                                                      \n"
+           "    -b, --bind-ip     <S>  Source IP (or CIDR mask)   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
@@ -243,6 +250,31 @@ static int connect_socket(thread *thread, connection *c) {
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
+    if (cfg.bind_range.count > 0) {
+        struct sockaddr_in source;
+
+#ifdef HAS_IP_BIND_ADDRESS_NO_PORT
+        /* https://git.kernel.org/torvalds/c/90c337da1524863838658078ec34241f45d8394d */
+        if (try_ip_bind_address_no_port) {
+            flags = 1;
+            if (setsockopt(fd, IPPROTO_IP, IP_BIND_ADDRESS_NO_PORT, &flags, sizeof(flags)) == -1) {
+                if (errno == EOPNOTSUPP || errno == ENOPROTOOPT)
+                    try_ip_bind_address_no_port = 0;
+            }
+        }
+#endif
+
+        memset(&source, 0, sizeof(source));
+        source.sin_family = AF_INET;
+        source.sin_addr.s_addr = ntohl(cfg.bind_range.ip++);
+
+        if (bind(fd, (struct sockaddr *) &source, sizeof(source)) == -1)
+            err(1, "bind(%s)", inet_ntoa(source.sin_addr));
+
+        if (cfg.bind_range.ip > cfg.bind_range.last_ip)
+            cfg.bind_range.ip = cfg.bind_range.first_ip;
+    }
+
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
     }
@@ -258,6 +290,8 @@ static int connect_socket(thread *thread, connection *c) {
     }
 
   error:
+    if (errno == EADDRNOTAVAIL)
+        err(1, "connect()");
     thread->errors.connect++;
     close(fd);
     return -1;
@@ -474,6 +508,7 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "bind-ip",     required_argument, NULL, 'b' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -489,7 +524,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lb:rv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -512,6 +547,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
+                break;
+            case 'b':
+                if (scan_cidr_range(optarg, &cfg->bind_range)) return -1;
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());

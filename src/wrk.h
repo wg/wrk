@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <err.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
