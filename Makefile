@@ -60,7 +60,7 @@ $(ODIR):
 
 $(ODIR)/bytecode.o: src/wrk.lua
 	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH=obj/bin:$(PATH) luajit -b $(CURDIR)/$< $(CURDIR)/$@'
+	@$(SHELL) -c 'PATH=obj/bin:$(PATH) luajit-2.1.0-beta2 -b $(CURDIR)/$< $(CURDIR)/$@'
 
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
@@ -84,7 +84,7 @@ $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 
 $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
-	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
+	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install CCDEBUG=-g
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...
