@@ -41,6 +41,8 @@
 
         --latency:     print detailed latency statistics
 
+        --breakout:    print connect, time to first byte (TTFB) and time to last byte (TTLB) statistics
+
         --timeout:     record a timeout if a response is not received within
                        this amount of time.
 
