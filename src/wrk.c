@@ -234,7 +234,6 @@ void *thread_main(void *arg) {
         c->request = request;
         c->length  = length;
         c->delayed = cfg.delay;
-        c->requested = c->connect = c->first_byte = c->last_byte = 0;
         connect_socket(thread, c);
     }
 
@@ -254,7 +253,7 @@ static int connect_socket(thread *thread, connection *c) {
     struct addrinfo *addr = thread->addr;
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
-    if(c->requested == 0) c->requested = time_us();
+
     fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
     flags = fcntl(fd, F_GETFL, 0);
@@ -266,6 +265,9 @@ static int connect_socket(thread *thread, connection *c) {
 
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+
+    c->connect = c->first_byte = c->last_byte = 0;
+    c->requested = time_us();
 
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
@@ -343,7 +345,11 @@ static int response_complete(http_parser *parser) {
     thread *thread = c->thread;
     uint64_t now = time_us();
     int status = parser->status_code;
-
+    if(c->last_byte != 0 && c->first_byte != 0) {
+        if(!stats_record(statistics.last_byte, c->last_byte - c->first_byte)) {
+            printf("unabe to record last byte metrics %lld - %lld = %lld \n", c->last_byte, c->first_byte, (c->last_byte - c->first_byte));
+        }
+    }
     thread->complete++;
     thread->requests++;
 
@@ -384,16 +390,19 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
         case ERROR: goto error;
         case RETRY: return;
     }
+    if(c->connect == 0) {
+        c->connect = time_us();
+        if(!stats_record(statistics.connect, c->connect - c->requested)) {
+            printf("unable to record connect\n");
+        }
+    }
 
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->written = 0;
-    if(c->connect == 0) {
-        c->connect = time_us();
-        stats_record(statistics.connect, c->connect - c->requested);
-    }
 
     aeCreateFileEvent(c->thread->loop, fd, AE_READABLE, socket_readable, c);
     aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, c);
+
     return;
 
   error:
@@ -418,6 +427,8 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         }
         c->start   = time_us();
         c->pending = cfg.pipeline;
+        c->connect = time_us();
+        c->first_byte = c->last_byte = 0;
     }
 
     char  *buf = c->request + c->written;
@@ -446,16 +457,18 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     size_t n;
-
     do {
+        
+        if (c->first_byte == 0) {
+            c->first_byte = time_us();
+            if(!stats_record(statistics.first_byte, c->first_byte - c->connect)) {
+                printf("unable to record first byte metrics\n");
+            }
+        }
         switch (sock.read(c, &n)) {
             case OK:    break;
             case ERROR: goto error;
             case RETRY: return;
-        }
-        if (c->first_byte == 0) {
-            c->first_byte = time_us();
-            stats_record(statistics.first_byte, c->first_byte - c->connect);
         }
         c->last_byte = time_us();
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
@@ -463,8 +476,6 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 
         c->thread->bytes += n;
     } while (n == RECVBUF && sock.readable(c) > 0);
-    
-    stats_record(statistics.last_byte, c->last_byte - c->first_byte);
 
     return;
 
