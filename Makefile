@@ -30,10 +30,13 @@ DEPS    :=
 CFLAGS  += -I$(ODIR)/include
 LDFLAGS += -L$(ODIR)/lib
 
+WITH_LUAJIT_VERSION ?= luajit-2.0
+
 ifneq ($(WITH_LUAJIT),)
-	CFLAGS  += -I$(WITH_LUAJIT)/include
+	CFLAGS  += -I$(WITH_LUAJIT)/include/$(WITH_LUAJIT_VERSION)
 	LDFLAGS += -L$(WITH_LUAJIT)/lib
 else
+	CFLAGS += -I$(ODIR)/include/luajit-2.0
 	DEPS += $(ODIR)/lib/libluajit-5.1.a
 endif
 
