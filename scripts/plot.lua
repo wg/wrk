@@ -1,7 +1,7 @@
 -- example script that demonstrates possibility to collect
 -- requests statistics and create custom reports
 
-require("report.stats")
+require("stats")
 
 local template, startFirstPart, endFirstPart, startSecondPart, endSecondPart, reportFile, report;
 
