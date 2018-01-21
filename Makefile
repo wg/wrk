@@ -34,7 +34,8 @@ ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
 	LDFLAGS += -L$(WITH_LUAJIT)/lib
 else
-	DEPS += $(ODIR)/lib/libluajit-5.1.a
+	CFLAGS  += -I$(ODIR)/include/luajit-2.0
+	DEPS    += $(ODIR)/lib/libluajit-5.1.a
 endif
 
 ifneq ($(WITH_OPENSSL),)
