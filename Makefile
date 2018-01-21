@@ -9,7 +9,7 @@ ifeq ($(TARGET), sunos)
 else ifeq ($(TARGET), darwin)
 	LDFLAGS += -pagezero_size 10000 -image_base 100000000
 else ifeq ($(TARGET), linux)
-	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE
+	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE -D_DEFAULT_SOURCE
 	LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
