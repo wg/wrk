@@ -73,25 +73,16 @@ void zlibc_free(void *ptr) {
 #define update_zmalloc_stat_alloc(__n) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
-    if (zmalloc_thread_safe) { \
-        atomicIncr(used_memory,__n,used_memory_mutex); \
-    } else { \
-        used_memory += _n; \
-    } \
+    atomicIncr(used_memory,__n); \
 } while(0)
 
 #define update_zmalloc_stat_free(__n) do { \
     size_t _n = (__n); \
     if (_n&(sizeof(long)-1)) _n += sizeof(long)-(_n&(sizeof(long)-1)); \
-    if (zmalloc_thread_safe) { \
-        atomicDecr(used_memory,__n,used_memory_mutex); \
-    } else { \
-        used_memory -= _n; \
-    } \
+    atomicDecr(used_memory,__n); \
 } while(0)
 
 static size_t used_memory = 0;
-static int zmalloc_thread_safe = 0;
 pthread_mutex_t used_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void zmalloc_default_oom(size_t size) {
@@ -220,17 +211,8 @@ char *zstrdup(const char *s) {
 
 size_t zmalloc_used_memory(void) {
     size_t um;
-
-    if (zmalloc_thread_safe) {
-        atomicGet(used_memory,um,used_memory_mutex);
-    } else {
-        um = used_memory;
-    }
+    atomicGet(used_memory,um);
     return um;
-}
-
-void zmalloc_enable_thread_safeness(void) {
-    zmalloc_thread_safe = 1;
 }
 
 void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
@@ -418,8 +400,9 @@ size_t zmalloc_get_memory_size(void) {
     if (sysctl(mib, 2, &size, &len, NULL, 0) == 0)
         return (size_t)size;
     return 0L;          /* Failed? */
-#endif /* sysctl and sysconf variants */
-
+#else
+    return 0L;          /* Unknown method to get the data. */
+#endif
 #else
     return 0L;          /* Unknown OS. */
 #endif
