@@ -34,7 +34,7 @@ ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
 	LDFLAGS += -L$(WITH_LUAJIT)/lib
 else
-	CFLAGS  += -I$(ODIR)/include/luajit-2.0
+	CFLAGS  += -I$(ODIR)/include/luajit-2.1
 	DEPS    += $(ODIR)/lib/libluajit-5.1.a
 endif
 
@@ -86,6 +86,7 @@ $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
 	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
+	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...
