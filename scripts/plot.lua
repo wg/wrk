@@ -28,11 +28,20 @@ function onStart(args)
 end
 
 function onStats(elapsed, time, status)
-    if status == 200 then
-        report:write("[" .. string.format('%.5f', elapsed) .. ",NaN," .. string.format('%.5f', time) .."],")
-    else
-        report:write("[" .. string.format('%.5f', elapsed) .. "," .. string.format('%.5f', time) ..",NaN],")
+    local elapsed = string.format('%.5f', elapsed)
+    local successReponseTime = "NaN"
+    local errorResponseTime = "NaN"
+
+    if time == nil then
+        time = 0.0
     end
+
+    if status >= 200 and status < 300 then
+        successReponseTime = string.format('%.5f', time)
+    else
+        errorResponseTime = string.format('%.5f', time)
+    end
+    report:write("[" .. elapsed .. "," .. errorResponseTime .."," .. successReponseTime .. "],")
 end
 
 function onEnd()
