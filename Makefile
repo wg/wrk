@@ -83,9 +83,14 @@ $(ODIR)/$(LUAJIT):  deps/$(LUAJIT).tar.gz  | $(ODIR)
 $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 	@tar -C $(ODIR) -xf $<
 
+# define a variable that is a single space, so we can use $(subst)
+# to replace spaces with an escaped space
+space :=
+space +=
+
 $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
-	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
+	@$(MAKE) -C $< PREFIX=$(subst $(space),\\\$(space),$(abspath $(ODIR))) BUILDMODE=static install
 	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
