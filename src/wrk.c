@@ -119,7 +119,10 @@ int main(int argc, char **argv) {
                 parser_settings.on_body         = response_body;
             }
         }
+    }
 
+    for (uint64_t i = 0; i < cfg.threads; i++) {
+        thread *t      = &threads[i];
         if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
             char *msg = strerror(errno);
             fprintf(stderr, "unable to create thread %"PRIu64": %s\n", i, msg);
