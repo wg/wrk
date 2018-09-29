@@ -9,7 +9,7 @@ ifeq ($(TARGET), sunos)
 else ifeq ($(TARGET), darwin)
 	LDFLAGS += -pagezero_size 10000 -image_base 100000000
 else ifeq ($(TARGET), linux)
-	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE
+	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE -D_DEFAULT_SOURCE
 	LIBS    += -ldl
 	LDFLAGS += -Wl,-E
 else ifeq ($(TARGET), freebsd)
@@ -34,7 +34,8 @@ ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
 	LDFLAGS += -L$(WITH_LUAJIT)/lib
 else
-	DEPS += $(ODIR)/lib/libluajit-5.1.a
+	CFLAGS  += -I$(ODIR)/include/luajit-2.1
+	DEPS    += $(ODIR)/lib/libluajit-5.1.a
 endif
 
 ifneq ($(WITH_OPENSSL),)
@@ -85,6 +86,7 @@ $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
 	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
+	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...
