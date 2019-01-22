@@ -32,6 +32,7 @@ static struct sock sock = {
 };
 
 static struct http_parser_settings parser_settings = {
+    .on_headers_complete = headers_complete,
     .on_message_complete = response_complete
 };
 
@@ -321,6 +322,12 @@ static int response_body(http_parser *parser, const char *at, size_t len) {
     return 0;
 }
 
+static int headers_complete(http_parser *parser) {
+    //Check if both content_length and F_CHUNKED is undefined
+    if(parser->content_length == ((uint64_t)-1) && !(parser->flags & F_CHUNKED))
+        return 1;
+    return 0;
+}
 static int response_complete(http_parser *parser) {
     connection *c = parser->data;
     thread *thread = c->thread;

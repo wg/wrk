@@ -37,6 +37,7 @@ static void socket_connected(aeEventLoop *, int, void *, int);
 static void socket_writeable(aeEventLoop *, int, void *, int);
 static void socket_readable(aeEventLoop *, int, void *, int);
 
+static int headers_complete(http_parser *);
 static int response_complete(http_parser *);
 static int header_field(http_parser *, const char *, size_t);
 static int header_value(http_parser *, const char *, size_t);
