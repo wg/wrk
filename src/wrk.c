@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     json_format;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -42,7 +43,7 @@ static void handler(int sig) {
 }
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"
+    printf("Usage: wrk <options> <url>                            \n"//
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
@@ -51,6 +52,7 @@ static void usage() {
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
+           "        --json-format      Print output as JSON       \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -135,8 +137,10 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &sa, NULL);
 
     char *time = format_time_s(cfg.duration);
-    printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    if (cfg.json_format == false) {
+        printf("Running %s test @ %s\n", time, url);
+        printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    }
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -170,30 +174,78 @@ int main(int argc, char **argv) {
         stats_correct(statistics.latency, interval);
     }
 
-    print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
-    if (cfg.latency) print_stats_latency(statistics.latency);
+    if (cfg.json_format == false) {
+        print_stats_header();
+        print_stats("Latency", statistics.latency, format_time_us);
+        print_stats("Req/Sec", statistics.requests, format_metric);
+        if (cfg.latency) print_stats_latency(statistics.latency);
 
-    char *runtime_msg = format_time_us(runtime_us);
+        char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
-    if (errors.connect || errors.read || errors.write || errors.timeout) {
-        printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
-               errors.connect, errors.read, errors.write, errors.timeout);
-    }
+        printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+        if (errors.connect || errors.read || errors.write || errors.timeout) {
+            printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
+                   errors.connect, errors.read, errors.write, errors.timeout);
+        }
 
-    if (errors.status) {
-        printf("  Non-2xx or 3xx responses: %d\n", errors.status);
-    }
+        if (errors.status) {
+            printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+        }
 
-    printf("Requests/sec: %9.2Lf\n", req_per_s);
-    printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
+        printf("Requests/sec: %9.2Lf\n", req_per_s);
+        printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
-    if (script_has_done(L)) {
-        script_summary(L, runtime_us, complete, bytes);
-        script_errors(L, &errors);
-        script_done(L, statistics.latency, statistics.requests);
+        if (script_has_done(L)) {
+            script_summary(L, runtime_us, complete, bytes);
+            script_errors(L, &errors);
+            script_done(L, statistics.latency, statistics.requests);
+        }
+    } else {
+        long double req_mean  = stats_mean(statistics.requests);
+        long double req_stdev  = stats_stdev(statistics.requests, req_mean);
+        long double req_within  = stats_within_stdev(statistics.requests, req_mean, req_stdev, 1);
+        long double lat_mean  = stats_mean(statistics.latency);
+        long double lat_stdev  = stats_stdev(statistics.latency, lat_mean);
+        long double lat_within  = stats_within_stdev(statistics.latency, lat_mean, lat_stdev, 1);
+        long double lat_perc_50  = stats_percentile(statistics.latency, 50.0) / 1000000.0;
+        long double lat_perc_75  = stats_percentile(statistics.latency, 75.0) / 1000000.0;
+        long double lat_perc_90  = stats_percentile(statistics.latency, 90.0) / 1000000.0;
+        long double lat_perc_95  = stats_percentile(statistics.latency, 95.0) / 1000000.0;
+        long double lat_perc_99  = stats_percentile(statistics.latency, 99.0) / 1000000.0;
+        printf("{\n");
+        printf("    \"threads\": %"PRIu64",\n", cfg.threads);
+        printf("    \"connections\": %"PRIu64",\n", cfg.connections);
+        printf("    \"duration\": %"PRIu64",\n", cfg.duration);
+        if (cfg.script) {
+            printf("    \"script\": %s,\n", cfg.script);
+        } else {
+            printf("    \"script\": null,\n");
+        }
+        printf("    \"runtime\": %"PRIu64",\n", runtime_us);
+        printf("    \"bytes_per_sec\": %Lf,\n", bytes_per_s);
+        printf("    \"requests_per_sec\": %Lf,\n", req_per_s);
+        printf("    \"requests_mean\": %Lf,\n", req_mean);
+        printf("    \"requests_stdev\": %Lf,\n", req_stdev);
+        printf("    \"requests_min\": %"PRIu64",\n", statistics.requests->min);
+        printf("    \"requests_max\": %"PRIu64",\n", statistics.requests->max);
+        printf("    \"requests_within_stdev\": %.2Lf,\n", req_within);
+        printf("    \"latency_mean\": %Lf,\n", lat_mean/1000000.0);
+        printf("    \"latency_stdev\": %Lf,\n", lat_stdev/1000000.0);
+        printf("    \"latency_min\": %f,\n", statistics.latency->min/1000000.0);
+        printf("    \"latency_max\": %f,\n", statistics.latency->max/1000000.0);
+        printf("    \"latency_within_stdev\": %.2Lf,\n", lat_within);
+        printf("    \"latency_percentile_50\": %.2Lf,\n", lat_perc_50);
+        printf("    \"latency_percentile_75\": %.2Lf,\n", lat_perc_75);
+        printf("    \"latency_percentile_90\": %.2Lf,\n", lat_perc_90);
+        printf("    \"latency_percentile_90\": %.2Lf,\n", lat_perc_90);
+        printf("    \"latency_percentile_95\": %.2Lf,\n", lat_perc_95);
+        printf("    \"latency_percentile_99\": %.2Lf,\n", lat_perc_99);
+        printf("    \"errors_connect\": %d,\n", errors.connect);
+        printf("    \"errors_read\": %d,\n", errors.read);
+        printf("    \"errors_write\": %d,\n", errors.write);
+        printf("    \"errors_timeout\": %d,\n", errors.timeout);
+        printf("    \"errors_status\": %d\n", errors.status);
+        printf("}");
     }
 
     return 0;
@@ -474,6 +526,7 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "json-format", no_argument,       NULL, 'j' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -488,8 +541,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->json_format = false;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?j", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -508,6 +562,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'j':
+                cfg->json_format = true;
                 break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
