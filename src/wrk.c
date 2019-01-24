@@ -43,7 +43,7 @@ static void handler(int sig) {
 }
 
 static void usage() {
-    printf("Usage: wrk <options> <url>                            \n"//
+    printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
            "    -d, --duration    <T>  Duration of test           \n"
@@ -52,7 +52,7 @@ static void usage() {
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
-           "        --json-format      Print output as JSON       \n"
+           "    -j  --json-format      Print output as JSON       \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -137,7 +137,7 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &sa, NULL);
 
     char *time = format_time_s(cfg.duration);
-    if (cfg.json_format == false) {
+    if (!cfg.json_format) {
         printf("Running %s test @ %s\n", time, url);
         printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
     }
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
         stats_correct(statistics.latency, interval);
     }
 
-    if (cfg.json_format == false) {
+    if (!cfg.json_format) {
         print_stats_header();
         print_stats("Latency", statistics.latency, format_time_us);
         print_stats("Req/Sec", statistics.requests, format_metric);
@@ -213,16 +213,20 @@ int main(int argc, char **argv) {
         long double lat_perc_95  = stats_percentile(statistics.latency, 95.0) / 1000000.0;
         long double lat_perc_99  = stats_percentile(statistics.latency, 99.0) / 1000000.0;
         printf("{\n");
+        printf("    \"url\": \"%s\",\n", url);
         printf("    \"threads\": %"PRIu64",\n", cfg.threads);
         printf("    \"connections\": %"PRIu64",\n", cfg.connections);
         printf("    \"duration\": %"PRIu64",\n", cfg.duration);
+        printf("    \"timeout\": %"PRIu64",\n", cfg.timeout);
         if (cfg.script) {
-            printf("    \"script\": %s,\n", cfg.script);
+            printf("    \"script\": \"%s\",\n", cfg.script);
         } else {
             printf("    \"script\": null,\n");
         }
-        printf("    \"runtime\": %"PRIu64",\n", runtime_us);
+        printf("    \"runtime_us\": %"PRIu64",\n", runtime_us);
+        printf("    \"bytes\": %"PRIu64",\n", bytes);
         printf("    \"bytes_per_sec\": %Lf,\n", bytes_per_s);
+        printf("    \"requests_count\": %"PRIu64",\n", statistics.requests->count);
         printf("    \"requests_per_sec\": %Lf,\n", req_per_s);
         printf("    \"requests_mean\": %Lf,\n", req_mean);
         printf("    \"requests_stdev\": %Lf,\n", req_stdev);
@@ -236,7 +240,6 @@ int main(int argc, char **argv) {
         printf("    \"latency_within_stdev\": %.2Lf,\n", lat_within);
         printf("    \"latency_percentile_50\": %.2Lf,\n", lat_perc_50);
         printf("    \"latency_percentile_75\": %.2Lf,\n", lat_perc_75);
-        printf("    \"latency_percentile_90\": %.2Lf,\n", lat_perc_90);
         printf("    \"latency_percentile_90\": %.2Lf,\n", lat_perc_90);
         printf("    \"latency_percentile_95\": %.2Lf,\n", lat_perc_95);
         printf("    \"latency_percentile_99\": %.2Lf,\n", lat_perc_99);
