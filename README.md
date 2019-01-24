@@ -41,6 +41,8 @@
 
         --latency:     print detailed latency statistics
 
+    -j  --json-format: print output as JSON format
+
         --timeout:     record a timeout if a response is not received within
                        this amount of time.
 
