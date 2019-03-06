@@ -1,0 +1,35 @@
+name: wrk
+version: git
+summary: Modern HTTP benchmarking tool
+description: |
+  wrk is a modern HTTP benchmarking tool capable of generating significant load
+  when run on a single multi-core CPU.
+
+  It combines a multithreaded design with scalable event notification systems
+  such as epoll and kqueue.
+
+  An optional LuaJIT script can perform HTTP request generation, response
+  processing, and custom reporting.
+license: Apache-2.0
+confinement: strict
+grade: stable
+base: core18
+
+apps:
+  wrk:
+    command: bin/wrk
+    plugs:
+      - home
+      - network
+
+parts:
+  wrk:
+    plugin: make
+    source: .
+    source-type: git
+    build-packages:
+      - build-essential
+    artifacts:
+      - wrk
+    organize:
+      wrk: bin/wrk
