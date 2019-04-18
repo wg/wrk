@@ -1,0 +1,46 @@
+version: 2
+jobs:
+  "alpine":
+    docker:
+      - image: alpine:latest
+    steps:
+      - run: apk update && apk add build-base git linux-headers perl
+      - checkout
+      - run: make
+  "centos-7":
+    docker:
+      - image: centos:7
+    steps:
+      - run: yum groupinstall -y "Development Tools"
+      - checkout
+      - run: make
+  "debian stable":
+    docker:
+      - image: debian:stable
+    steps:
+      - run: apt update && apt install -y build-essential git
+      - checkout
+      - run: make
+  "ubuntu-16.04":
+    docker:
+      - image: ubuntu:16.04
+    steps:
+      - run: apt update && apt install -y build-essential git
+      - checkout
+      - run: make
+  "ubuntu-18.04":
+    docker:
+      - image: ubuntu:18.04
+    steps:
+      - run: apt update && apt install -y build-essential git
+      - checkout
+      - run: make
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "alpine"
+      - "centos-7"
+      - "debian stable"
+      - "ubuntu-16.04"
+      - "ubuntu-18.04"
