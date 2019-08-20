@@ -21,12 +21,30 @@ void stats_free(stats *stats) {
 
 int stats_record(stats *stats, uint64_t n) {
     if (n >= stats->limit) return 0;
+#if defined(__STATS_USE__ATOMIC)
+    __atomic_fetch_add(&stats->data[n], 1, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&stats->count, 1, __ATOMIC_SEQ_CST);
+#else
     __sync_fetch_and_add(&stats->data[n], 1);
     __sync_fetch_and_add(&stats->count, 1);
+#endif
     uint64_t min = stats->min;
     uint64_t max = stats->max;
+#if defined(__STATS_USE__ATOMIC)
+    while (n < min) {
+        __atomic_compare_exchange(&stats->min, &min, &n, false,
+	                          __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	min = stats->min;
+    }
+    while (n > max) {
+        __atomic_compare_exchange(&stats->max, &max, &n, false,
+                                  __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+	max = stats->max;
+   }
+#else
     while (n < min) min = __sync_val_compare_and_swap(&stats->min, min, n);
     while (n > max) max = __sync_val_compare_and_swap(&stats->max, max, n);
+#endif
     return 1;
 }
 
