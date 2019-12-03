@@ -15,9 +15,28 @@ status sock_close(connection *c) {
 }
 
 status sock_read(connection *c, size_t *n) {
-    ssize_t r = read(c->fd, c->buf, sizeof(c->buf));
-    *n = (size_t) r;
-    return r >= 0 ? OK : ERROR;
+    size_t had = 0;
+    status exit;
+    for (;;) {
+        ssize_t r = read(c->fd, c->buf + had, sizeof(c->buf) - had);
+        if (r < 0) {
+            if (EAGAIN == errno || EWOULDBLOCK == errno) {
+                exit = OK;
+                break;
+            }
+            exit = ERROR;
+            break;
+        }
+
+        had += r;
+        if (had == sizeof(c->buf)) {
+            exit = OK;
+            break;
+        }
+    }
+    *n = (size_t) had;
+
+    return exit;
 }
 
 status sock_write(connection *c, char *buf, size_t len, size_t *n) {
