@@ -51,6 +51,13 @@ all: $(BIN)
 clean:
 	$(RM) -rf $(BIN) obj/*
 
+DESTDIR=/
+prefix=/usr/local
+
+install: $(BIN)
+	mkdir -p $(DESTDIR)/$(prefix)/bin/
+	cp $(BIN) $(DESTDIR)/$(prefix)/bin/
+
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
 	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
