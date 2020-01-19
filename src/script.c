@@ -86,6 +86,8 @@ lua_State *script_create(char *file, char *url, char **headers) {
             lua_pushlstring(L, *h, p - *h);
             lua_pushstring(L, p + 2);
             lua_settable(L, 5);
+        } else {
+          fprintf(stderr, "invalid -H value: `%s`\n", *h);
         }
     }
     lua_pop(L, 5);
