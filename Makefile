@@ -19,7 +19,7 @@ else ifeq ($(TARGET), freebsd)
 endif
 
 SRC  := wrk.c net.c ssl.c aprintf.c stats.c script.c units.c \
-		ae.c zmalloc.c http_parser.c
+		ae.c zmalloc.c http_parser.c lua_cjson.c strbuf.c
 BIN  := wrk
 VER  ?= $(shell git describe --tags --always --dirty)
 
@@ -87,7 +87,7 @@ $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 	@echo Building LuaJIT...
 	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
-	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
+	-@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...

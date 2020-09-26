@@ -45,9 +45,25 @@ static const struct luaL_Reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
+/*
+ * load lua lib and call it
+ */
+void lua_load_lib(lua_State* L, const char* libname, lua_CFunction luafunc)
+{
+    lua_pushcfunction(L, luafunc);
+    lua_pushstring(L, libname);
+    lua_call(L, 1, 0);
+}
+
+int(luaopen_cjson)(lua_State* L);
+
 lua_State *script_create(char *file, char *url, char **headers) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
+
+    // cjson lib
+    lua_load_lib(L, "cjson", luaopen_cjson);
+
     (void) luaL_dostring(L, "wrk = require \"wrk\"");
 
     luaL_newmetatable(L, "wrk.addr");
