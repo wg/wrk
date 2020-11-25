@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
-        script_done(L, statistics.latency, statistics.requests);
+        script_done(L, statistics.latency, statistics.requests, statistics.connect_time);
     }
     stats_free(statistics.requests);
     stats_free(statistics.latency);

@@ -248,16 +248,18 @@ void script_push_stats(lua_State *L, stats *s) {
     lua_setmetatable(L, -2);
 }
 
-void script_done(lua_State *L, stats *latency, stats *requests) {
+void script_done(lua_State *L, stats *latency, stats *requests, stats *connect_time) {
     lua_getglobal(L, "done");
     lua_pushvalue(L, 1);
 
     script_push_stats(L, latency);
     script_push_stats(L, requests);
+    script_push_stats(L, connect_time);
 
-    lua_call(L, 3, 0);
+    lua_call(L, 4, 0);
     lua_pop(L, 1);
 }
+
 
 static int verify_request(http_parser *parser) {
     size_t *count = parser->data;
