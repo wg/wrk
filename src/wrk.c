@@ -195,6 +195,8 @@ int main(int argc, char **argv) {
         script_errors(L, &errors);
         script_done(L, statistics.latency, statistics.requests);
     }
+    stats_free(statistics.requests);
+    stats_free(statistics.latency);
 
     return 0;
 }
