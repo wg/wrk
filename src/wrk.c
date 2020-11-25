@@ -21,6 +21,7 @@ static struct config {
 static struct {
     stats *latency;
     stats *requests;
+    stats *connect_time;
 } statistics;
 
 static struct sock sock = {
@@ -90,6 +91,7 @@ int main(int argc, char **argv) {
 
     statistics.latency  = stats_alloc(cfg.timeout * 1000);
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
+    statistics.connect_time = stats_alloc(cfg.timeout * 1000);
     thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
     lua_State *L = script_create(cfg.script, url, headers);
@@ -168,11 +170,13 @@ int main(int argc, char **argv) {
     if (complete / cfg.connections > 0) {
         int64_t interval = runtime_us / (complete / cfg.connections);
         stats_correct(statistics.latency, interval);
+        stats_correct(statistics.connect_time, interval);
     }
 
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
+    print_stats("Conn", statistics.connect_time, format_time_us);
     if (cfg.latency) print_stats_latency(statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
@@ -197,6 +201,7 @@ int main(int argc, char **argv) {
     }
     stats_free(statistics.requests);
     stats_free(statistics.latency);
+    stats_free(statistics.connect_time);
 
     return 0;
 }
@@ -347,6 +352,9 @@ static int response_complete(http_parser *parser) {
 
     if (--c->pending == 0) {
         if (!stats_record(statistics.latency, now - c->start)) {
+            thread->errors.timeout++;
+        }
+        if (!stats_record(statistics.connect_time, c->connect_time)) {
             thread->errors.timeout++;
         }
         c->delayed = cfg.delay;
