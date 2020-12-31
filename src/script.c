@@ -501,8 +501,11 @@ void script_copy_value(lua_State *src, lua_State *dst, int index) {
         case LUA_TNUMBER:
             lua_pushnumber(dst, lua_tonumber(src, index));
             break;
-        case LUA_TSTRING:
-            lua_pushstring(dst, lua_tostring(src, index));
+        case LUA_TSTRING: {
+              size_t len = 0;
+              const char *str = lua_tolstring(src, index, &len);
+              lua_pushlstring(dst, str, len);
+            }
             break;
         case LUA_TTABLE:
             lua_newtable(dst);
