@@ -91,11 +91,7 @@ $(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...
-ifeq ($(TARGET), darwin)
-	@$(SHELL) -c "cd $< && ./Configure $(OPENSSL_OPTS) darwin64-x86_64-cc"
-else
 	@$(SHELL) -c "cd $< && ./config $(OPENSSL_OPTS)"
-endif
 	@$(MAKE) -C $< depend
 	@$(MAKE) -C $<
 	@$(MAKE) -C $< install_sw
