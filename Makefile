@@ -59,9 +59,9 @@ $(OBJ): config.h Makefile $(DEPS) | $(ODIR)
 $(ODIR):
 	@mkdir -p $@
 
-$(ODIR)/bytecode.o: src/wrk.lua
+$(ODIR)/bytecode.c: src/wrk.lua $(DEPS)
 	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH=obj/bin:$(PATH) luajit -b $(CURDIR)/$< $(CURDIR)/$@'
+	@$(SHELL) -c 'PATH="obj/bin:$(PATH)" luajit -b "$(CURDIR)/$<" "$(CURDIR)/$@"'
 
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
