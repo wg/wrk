@@ -7,7 +7,6 @@ ifeq ($(TARGET), sunos)
 	CFLAGS += -D_PTHREADS -D_POSIX_C_SOURCE=200112L
 	LIBS   += -lsocket
 else ifeq ($(TARGET), darwin)
-	LDFLAGS += -pagezero_size 10000 -image_base 100000000
 	export MACOSX_DEPLOYMENT_TARGET = $(shell sw_vers -productVersion)
 else ifeq ($(TARGET), linux)
 	CFLAGS  += -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE -D_DEFAULT_SOURCE
@@ -73,13 +72,14 @@ $(ODIR)/%.o : %.c
 
 # Dependencies
 
-LUAJIT  := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/LuaJIT*.tar.gz)))
+LUAJIT  := $(notdir $(patsubst %.zip,%,$(wildcard deps/LuaJIT*.zip)))
 OPENSSL := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/openssl*.tar.gz)))
 
 OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
 
-$(ODIR)/$(LUAJIT):  deps/$(LUAJIT).tar.gz  | $(ODIR)
-	@tar -C $(ODIR) -xf $<
+$(ODIR)/$(LUAJIT): deps/$(LUAJIT).zip | $(ODIR)
+	echo $(LUAJIT)
+	@unzip -nd $(ODIR) $<
 
 $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 	@tar -C $(ODIR) -xf $<
