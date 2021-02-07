@@ -1,6 +1,0 @@
-jobs:
-  - job: macos
-    pool:
-      vmImage: 'macos-10.14'
-    steps:
-      - script: make
