@@ -13,7 +13,7 @@ lua_State *script_create(char *, char *, char **);
 
 bool script_resolve(lua_State *, char *, char *);
 void script_setup(lua_State *, thread *);
-void script_done(lua_State *, stats *, stats *);
+void script_done(lua_State *, stats *, stats *, stats *);
 
 void script_init(lua_State *, thread *, int, char **);
 uint64_t script_delay(lua_State *);
