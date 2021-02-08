@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WRK chart report</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.0.0/dygraph.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.0.0/dygraph.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div id="latencies" style="font-family: Courier; width: 100%; height: 600px"></div>
+    <button id="download">Download as PNG</button>
+    <script>
+        new Dygraph(
+            document.getElementById("latencies"),
+            [/* data */].sort(function (a, b) {return a[0] - b[0]}),
+            {
+                title: 'WRK chart report',
+                labels: ['Seconds', 'Error', 'Success'],
+                ylabel: 'Latency (ms)',
+                xlabel: 'Seconds elapsed',
+                showRoller: true,
+                colors: ['#FA7878', '#8AE234'],
+                legend: 'always',
+                logscale: true,
+                strokeWidth: 1.3
+            }
+        );
+        document.getElementById("download").addEventListener("click", function(e) {
+            html2canvas(document.body, {
+                background: "#fff",
+                onrendered: function(canvas) {
+                    var url = canvas.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+                    var a = document.createElement("a");
+                    a.setAttribute("download", "wrk-plot.png");
+                    a.setAttribute("href", url);
+                    a.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
