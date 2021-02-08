@@ -5,7 +5,7 @@
   design with scalable event notification systems such as epoll and kqueue.
 
   An optional LuaJIT script can perform HTTP request generation, response
-  processing, and custom reporting. Details are available in SCRIPTING and
+  processing, and custom reporting. Details are available in [SCRIPTING](SCRIPTING) and
   several examples are located in [scripts/](scripts/).
 
 ## Basic Usage
