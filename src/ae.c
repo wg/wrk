@@ -75,6 +75,8 @@ aeEventLoop *aeCreateEventLoop(int setsize) {
     eventLoop->stop = 0;
     eventLoop->maxfd = -1;
     eventLoop->beforesleep = NULL;
+    eventLoop->checkThreadStop = NULL;
+    eventLoop->checkThreadStopData = NULL;
     if (aeApiCreate(eventLoop) == -1) goto err;
     /* Events with mask == AE_NONE are not set. So let's initialize the
      * vector with it. */
@@ -416,6 +418,13 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
                     fe->wfileProc(eventLoop,fd,fe->clientData,mask);
             }
             processed++;
+
+            if (eventLoop->checkThreadStop != NULL) {
+                if (eventLoop->checkThreadStop(eventLoop) == 1) {
+                    eventLoop->stop = 1;
+                    break;
+                }
+            }
         }
     }
     /* Check time events */
@@ -462,4 +471,10 @@ char *aeGetApiName(void) {
 
 void aeSetBeforeSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *beforesleep) {
     eventLoop->beforesleep = beforesleep;
+}
+
+void aeSetCheckThreadStopProc(aeEventLoop *eventLoop,
+        aeCheckThreadStopProc *checkThreadStop, void *checkData) {
+    eventLoop->checkThreadStop = checkThreadStop;
+    eventLoop->checkThreadStopData = checkData;
 }

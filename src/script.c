@@ -45,9 +45,25 @@ static const struct luaL_Reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
+/*
+ * load lua lib and call it
+ */
+void lua_load_lib(lua_State* L, const char* libname, lua_CFunction luafunc)
+{
+    lua_pushcfunction(L, luafunc);
+    lua_pushstring(L, libname);
+    lua_call(L, 1, 0);
+}
+
+int(luaopen_cjson)(lua_State* L);
+
 lua_State *script_create(char *file, char *url, char **headers) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
+
+    // cjson lib
+    lua_load_lib(L, "cjson", luaopen_cjson);
+
     (void) luaL_dostring(L, "wrk = require \"wrk\"");
 
     luaL_newmetatable(L, "wrk.addr");
@@ -90,7 +106,7 @@ lua_State *script_create(char *file, char *url, char **headers) {
     }
     lua_pop(L, 5);
 
-    if (file && luaL_dofile(L, file)) {
+    if (file && luaL_dofile(L, strcmp("-", file) ? file : NULL)) {
         const char *cause = lua_tostring(L, -1);
         fprintf(stderr, "%s: %s\n", file, cause);
     }
@@ -485,8 +501,11 @@ void script_copy_value(lua_State *src, lua_State *dst, int index) {
         case LUA_TNUMBER:
             lua_pushnumber(dst, lua_tonumber(src, index));
             break;
-        case LUA_TSTRING:
-            lua_pushstring(dst, lua_tostring(src, index));
+        case LUA_TSTRING: {
+              size_t len = 0;
+              const char *str = lua_tolstring(src, index, &len);
+              lua_pushlstring(dst, str, len);
+            }
             break;
         case LUA_TTABLE:
             lua_newtable(dst);
