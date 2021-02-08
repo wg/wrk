@@ -25,6 +25,8 @@
 extern const char *VERSION;
 
 typedef struct {
+    int tindex;
+    int tcount;
     pthread_t thread;
     aeEventLoop *loop;
     struct addrinfo *addr;
