@@ -8,7 +8,8 @@
 
 #include "ssl.h"
 
-SSL_CTX *ssl_init() {
+SSL_CTX *ssl_init(char *clientcert, char *clientkey,
+      char *cafile, char *capath) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
@@ -16,10 +17,26 @@ SSL_CTX *ssl_init() {
     OpenSSL_add_all_algorithms();
 
     if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
-        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-        SSL_CTX_set_verify_depth(ctx, 0);
+        if (!cafile && !capath) {
+            SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+            SSL_CTX_set_verify_depth(ctx, 0);
+        } else {
+            SSL_CTX_load_verify_locations(ctx, cafile, capath);
+        }
         SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
         SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+
+        if (clientcert) {
+            if(1 != SSL_CTX_use_certificate_chain_file(ctx, clientcert)) {
+                fprintf(stderr, "unable to load client certificate chain\n");
+                return NULL;
+            }
+            if(1 != SSL_CTX_use_PrivateKey_file(
+                  ctx, clientkey, SSL_FILETYPE_PEM)) {
+                fprintf(stderr, "unable to load client key\n");
+                return NULL;
+            }
+        }
     }
 
     return ctx;
