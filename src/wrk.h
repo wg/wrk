@@ -33,6 +33,10 @@ typedef struct {
     uint64_t requests;
     uint64_t bytes;
     uint64_t start;
+    uint64_t requested;
+    uint64_t connect;
+    uint64_t first_byte;
+    uint64_t last_byte;
     lua_State *L;
     errors errors;
     struct connection *cs;
@@ -54,6 +58,10 @@ typedef struct connection {
     SSL *ssl;
     bool delayed;
     uint64_t start;
+    uint64_t requested;
+    uint64_t connect;
+    uint64_t first_byte;
+    uint64_t last_byte;
     char *request;
     size_t length;
     size_t written;

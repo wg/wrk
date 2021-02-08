@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     breakout;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -20,6 +21,9 @@ static struct config {
 
 static struct {
     stats *latency;
+    stats *connect;
+    stats *first_byte;
+    stats *last_byte;
     stats *requests;
 } statistics;
 
@@ -51,6 +55,7 @@ static void usage() {
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
+           "        --breakout         Print breakout statistics  \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -88,9 +93,12 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT,  SIG_IGN);
 
-    statistics.latency  = stats_alloc(cfg.timeout * 1000);
-    statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
-    thread *threads     = zcalloc(cfg.threads * sizeof(thread));
+    statistics.latency      = stats_alloc(cfg.timeout * 1000);
+    statistics.connect      = stats_alloc(cfg.timeout * 1000);
+    statistics.first_byte   = stats_alloc(cfg.timeout * 1000);
+    statistics.last_byte    = stats_alloc(cfg.timeout * 1000);
+    statistics.requests     = stats_alloc(MAX_THREAD_RATE_S);
+    thread *threads         = zcalloc(cfg.threads * sizeof(thread));
 
     lua_State *L = script_create(cfg.script, url, headers);
     if (!script_resolve(L, host, service)) {
@@ -168,11 +176,19 @@ int main(int argc, char **argv) {
     if (complete / cfg.connections > 0) {
         int64_t interval = runtime_us / (complete / cfg.connections);
         stats_correct(statistics.latency, interval);
+        stats_correct(statistics.connect, interval);
+        stats_correct(statistics.first_byte, interval);
+        stats_correct(statistics.last_byte, interval);
     }
 
     print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
+    print_stats("Latency",  statistics.latency, format_time_us);
+    if(cfg.breakout) {
+        print_stats("Connect",  statistics.connect, format_time_us);
+        print_stats("TTFB",     statistics.first_byte, format_time_us);
+        print_stats("TTLB",     statistics.last_byte, format_time_us);
+    }
+    print_stats("Req/Sec",  statistics.requests, format_metric);
     if (cfg.latency) print_stats_latency(statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
@@ -250,6 +266,9 @@ static int connect_socket(thread *thread, connection *c) {
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
 
+    c->connect = c->first_byte = c->last_byte = 0;
+    c->requested = time_us();
+
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
         c->parser.data = c;
@@ -326,7 +345,11 @@ static int response_complete(http_parser *parser) {
     thread *thread = c->thread;
     uint64_t now = time_us();
     int status = parser->status_code;
-
+    if(c->last_byte != 0 && c->first_byte != 0) {
+        if(!stats_record(statistics.last_byte, c->last_byte - c->first_byte)) {
+            printf("unabe to record last byte metrics %lld - %lld = %lld \n", c->last_byte, c->first_byte, (c->last_byte - c->first_byte));
+        }
+    }
     thread->complete++;
     thread->requests++;
 
@@ -367,6 +390,12 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
         case ERROR: goto error;
         case RETRY: return;
     }
+    if(c->connect == 0) {
+        c->connect = time_us();
+        if(!stats_record(statistics.connect, c->connect - c->requested)) {
+            printf("unable to record connect\n");
+        }
+    }
 
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->written = 0;
@@ -398,6 +427,8 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         }
         c->start   = time_us();
         c->pending = cfg.pipeline;
+        c->connect = time_us();
+        c->first_byte = c->last_byte = 0;
     }
 
     char  *buf = c->request + c->written;
@@ -426,14 +457,20 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     size_t n;
-
     do {
+        
+        if (c->first_byte == 0) {
+            c->first_byte = time_us();
+            if(!stats_record(statistics.first_byte, c->first_byte - c->connect)) {
+                printf("unable to record first byte metrics\n");
+            }
+        }
         switch (sock.read(c, &n)) {
             case OK:    break;
             case ERROR: goto error;
             case RETRY: return;
         }
-
+        c->last_byte = time_us();
         if (http_parser_execute(&c->parser, &parser_settings, c->buf, n) != n) goto error;
         if (n == 0 && !http_body_is_final(&c->parser)) goto error;
 
@@ -473,6 +510,7 @@ static struct option longopts[] = {
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
+    { "breakout",    no_argument,       NULL, 'B' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -508,6 +546,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 'L':
                 cfg->latency = true;
+                break;
+            case 'B':
+                cfg->breakout = true;
                 break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
