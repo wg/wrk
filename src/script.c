@@ -90,7 +90,7 @@ lua_State *script_create(char *file, char *url, char **headers) {
     }
     lua_pop(L, 5);
 
-    if (file && luaL_dofile(L, file)) {
+    if (file && luaL_dofile(L, strcmp("-", file) ? file : NULL)) {
         const char *cause = lua_tostring(L, -1);
         fprintf(stderr, "%s: %s\n", file, cause);
     }
