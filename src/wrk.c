@@ -179,12 +179,12 @@ int main(int argc, char **argv) {
 
     printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
-        printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
+        printf("  Socket errors: connect %"PRIu32", read %"PRIu32", write %"PRIu32", timeout %"PRIu32"\n",
                errors.connect, errors.read, errors.write, errors.timeout);
     }
 
     if (errors.status) {
-        printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+        printf("  Non-2xx or 3xx responses: %"PRIu32"\n", errors.status);
     }
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
