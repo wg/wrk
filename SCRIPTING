@@ -67,7 +67,7 @@ Running
   function init(args)
   function delay()
   function request()
-  function response(status, headers, body)
+  function response(status, headers, body, userdata)
 
   The running phase begins with a single call to init(), followed by
   a call to request() and response() for each request cycle.

@@ -29,7 +29,7 @@ struct config;
 
 static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
-static int reconnect_socket(thread *, connection *);
+static int reconnect_socket(thread *, session *);
 
 static int record_rate(aeEventLoop *, long long, void *);
 

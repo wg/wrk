@@ -63,4 +63,10 @@ typedef struct connection {
     char buf[RECVBUF];
 } connection;
 
+typedef struct session {
+    char *id;
+    size_t len;
+    connection *c;
+} session;
+
 #endif /* WRK_H */

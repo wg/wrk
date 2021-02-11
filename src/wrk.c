@@ -206,9 +206,9 @@ void *thread_main(void *arg) {
     size_t length = 0;
 
     if (!cfg.dynamic) {
-        script_request(thread->L, &request, &length);
+        script_request(thread->L, &request, &length, NULL, 0);
     }
-
+    
     thread->cs = zcalloc(thread->connections * sizeof(connection));
     connection *c = thread->cs;
 
@@ -263,10 +263,13 @@ static int connect_socket(thread *thread, connection *c) {
     return -1;
 }
 
-static int reconnect_socket(thread *thread, connection *c) {
+static int reconnect_socket(thread *thread, session *sess) {
+    connection *c = sess->c;
     aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
     sock.close(c);
     close(c->fd);
+    zfree(sess->id);
+    zfree(sess);
     return connect_socket(thread, c);
 }
 
@@ -289,14 +292,16 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
 }
 
 static int delay_request(aeEventLoop *loop, long long id, void *data) {
-    connection *c = data;
+    session *sess = data;
+    connection *c = sess->c;
     c->delayed = false;
-    aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, c);
+    aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, sess);
     return AE_NOMORE;
 }
 
 static int header_field(http_parser *parser, const char *at, size_t len) {
-    connection *c = parser->data;
+    session *sess = parser->data;
+    connection *c = sess->c;
     if (c->state == VALUE) {
         *c->headers.cursor++ = '\0';
         c->state = FIELD;
@@ -306,7 +311,8 @@ static int header_field(http_parser *parser, const char *at, size_t len) {
 }
 
 static int header_value(http_parser *parser, const char *at, size_t len) {
-    connection *c = parser->data;
+    session *sess = parser->data;
+    connection *c = sess->c;
     if (c->state == FIELD) {
         *c->headers.cursor++ = '\0';
         c->state = VALUE;
@@ -316,13 +322,15 @@ static int header_value(http_parser *parser, const char *at, size_t len) {
 }
 
 static int response_body(http_parser *parser, const char *at, size_t len) {
-    connection *c = parser->data;
+    session *sess = parser->data;
+    connection *c = sess->c;
     buffer_append(&c->body, at, len);
     return 0;
 }
 
 static int response_complete(http_parser *parser) {
-    connection *c = parser->data;
+    session *sess = parser->data;
+    connection *c = sess->c;
     thread *thread = c->thread;
     uint64_t now = time_us();
     int status = parser->status_code;
@@ -336,7 +344,7 @@ static int response_complete(http_parser *parser) {
 
     if (c->headers.buffer) {
         *c->headers.cursor++ = '\0';
-        script_response(thread->L, status, &c->headers, &c->body);
+        script_response(thread->L, status, &c->headers, &c->body, sess->id, sess->len);
         c->state = FIELD;
     }
 
@@ -345,14 +353,13 @@ static int response_complete(http_parser *parser) {
             thread->errors.timeout++;
         }
         c->delayed = cfg.delay;
-        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
+        aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, sess);
     }
 
     if (!http_should_keep_alive(parser)) {
-        reconnect_socket(thread, c);
+        reconnect_socket(thread, sess);
         goto done;
     }
-
     http_parser_init(parser, HTTP_RESPONSE);
 
   done:
@@ -361,28 +368,33 @@ static int response_complete(http_parser *parser) {
 
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-
+    session *sess = zcalloc(sizeof(session));
+    sess->len = 128;
+    sess->id = zcalloc(sess->len);
+    sess->c = c;
+    c->parser.data = sess;
     switch (sock.connect(c, cfg.host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
     }
-
+    
     http_parser_init(&c->parser, HTTP_RESPONSE);
     c->written = 0;
 
-    aeCreateFileEvent(c->thread->loop, fd, AE_READABLE, socket_readable, c);
-    aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, c);
+    aeCreateFileEvent(c->thread->loop, fd, AE_READABLE, socket_readable, sess);
+    aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, sess);
 
     return;
 
   error:
     c->thread->errors.connect++;
-    reconnect_socket(c->thread, c);
+    reconnect_socket(c->thread, sess);
 }
 
 static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
-    connection *c = data;
+    session *sess = data;
+    connection *c = sess->c;
     thread *thread = c->thread;
 
     if (c->delayed) {
@@ -394,7 +406,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
     if (!c->written) {
         if (cfg.dynamic) {
-            script_request(thread->L, &c->request, &c->length);
+            script_request(thread->L, &c->request, &c->length, &sess->id, &sess->len);
         }
         c->start   = time_us();
         c->pending = cfg.pipeline;
@@ -420,11 +432,12 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   error:
     thread->errors.write++;
-    reconnect_socket(thread, c);
+    reconnect_socket(thread, sess);
 }
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
-    connection *c = data;
+    session *sess = data;
+    connection *c = sess->c;
     size_t n;
 
     do {
@@ -444,7 +457,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   error:
     c->thread->errors.read++;
-    reconnect_socket(c->thread, c);
+    reconnect_socket(c->thread, sess);
 }
 
 static uint64_t time_us() {
