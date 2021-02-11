@@ -24,6 +24,6 @@ Dependencies
 
     make WITH_LUAJIT=/usr WITH_OPENSSL=/usr
 
-  Or to use the Homebrew version of OpenSSL on Mac OS X:
+  Or to use the Homebrew version of OpenSSL on macOS:
 
     make WITH_OPENSSL=/usr/local/opt/openssl
