@@ -291,6 +291,7 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
 static int delay_request(aeEventLoop *loop, long long id, void *data) {
     connection *c = data;
     c->delayed = false;
+    c->delay_in_progress = false;
     aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, c);
     return AE_NOMORE;
 }
@@ -372,7 +373,9 @@ static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     c->written = 0;
 
     aeCreateFileEvent(c->thread->loop, fd, AE_READABLE, socket_readable, c);
-    aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, c);
+    if (!c->delay_in_progress) {
+      aeCreateFileEvent(c->thread->loop, fd, AE_WRITABLE, socket_writeable, c);
+    }
 
     return;
 
@@ -386,6 +389,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     thread *thread = c->thread;
 
     if (c->delayed) {
+        c->delay_in_progress = true;
         uint64_t delay = script_delay(thread->L);
         aeDeleteFileEvent(loop, fd, AE_WRITABLE);
         aeCreateTimeEvent(loop, delay, delay_request, c, NULL);
