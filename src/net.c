@@ -7,6 +7,14 @@
 #include "net.h"
 
 status sock_connect(connection *c, char *host) {
+    int error;
+    socklen_t error_len = sizeof(error);
+    int rc = getsockopt(c->fd, SOL_SOCKET, SO_ERROR, (void *)&error, &error_len);
+    if (rc == -1 || error != 0) {
+        c->thread->errors.connect++;
+        return ERROR;
+    }
+
     return OK;
 }
 
