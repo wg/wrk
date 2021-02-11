@@ -26,23 +26,24 @@ ODIR := obj
 OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
 LIBS := -lluajit-5.1 $(LIBS)
 
+LIB     := lib
 DEPS    :=
 CFLAGS  += -I$(ODIR)/include
 LDFLAGS += -L$(ODIR)/lib
 
 ifneq ($(WITH_LUAJIT),)
 	CFLAGS  += -I$(WITH_LUAJIT)/include
-	LDFLAGS += -L$(WITH_LUAJIT)/lib
+	LDFLAGS += -L$(WITH_LUAJIT)/$(LIB)
 else
 	CFLAGS  += -I$(ODIR)/include/luajit-2.1
-	DEPS    += $(ODIR)/lib/libluajit-5.1.a
+	DEPS    += $(ODIR)/$(LIB)/libluajit-5.1.a
 endif
 
 ifneq ($(WITH_OPENSSL),)
 	CFLAGS  += -I$(WITH_OPENSSL)/include
-	LDFLAGS += -L$(WITH_OPENSSL)/lib
+	LDFLAGS += -L$(WITH_OPENSSL)/$(LIB)
 else
-	DEPS += $(ODIR)/lib/libssl.a
+	DEPS += $(ODIR)/$(LIB)/libssl.a
 endif
 
 all: $(BIN)
