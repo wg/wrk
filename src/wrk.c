@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
     uint64_t start    = time_us();
     uint64_t complete = 0;
     uint64_t bytes    = 0;
+    uint64_t connects = 0;
     errors errors     = { 0 };
 
     sleep(cfg.duration);
@@ -152,6 +153,7 @@ int main(int argc, char **argv) {
 
         complete += t->complete;
         bytes    += t->bytes;
+        connects += t->connects;
 
         errors.connect += t->errors.connect;
         errors.read    += t->errors.read;
@@ -164,6 +166,7 @@ int main(int argc, char **argv) {
     long double runtime_s   = runtime_us / 1000000.0;
     long double req_per_s   = complete   / runtime_s;
     long double bytes_per_s = bytes      / runtime_s;
+    long double req_per_con = (long double)complete / connects;
 
     if (complete / cfg.connections > 0) {
         int64_t interval = runtime_us / (complete / cfg.connections);
@@ -177,7 +180,8 @@ int main(int argc, char **argv) {
 
     char *runtime_msg = format_time_us(runtime_us);
 
-    printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
+    printf("  %"PRIu64" requests in %s, %"PRIu64" connections, %sB read\n",
+            complete, runtime_msg, connects, format_binary(bytes));
     if (errors.connect || errors.read || errors.write || errors.timeout) {
         printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
                errors.connect, errors.read, errors.write, errors.timeout);
@@ -188,10 +192,11 @@ int main(int argc, char **argv) {
     }
 
     printf("Requests/sec: %9.2Lf\n", req_per_s);
+    printf("Requests/conn:%9.2Lf\n", req_per_con);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
     if (script_has_done(L)) {
-        script_summary(L, runtime_us, complete, bytes);
+        script_summary(L, runtime_us, complete, bytes, connects);
         script_errors(L, &errors);
         script_done(L, statistics.latency, statistics.requests);
     }
@@ -246,6 +251,8 @@ static int connect_socket(thread *thread, connection *c) {
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
     }
+
+    thread->connects++;
 
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));

@@ -25,7 +25,7 @@ bool script_is_static(lua_State *);
 bool script_want_response(lua_State *L);
 bool script_has_delay(lua_State *L);
 bool script_has_done(lua_State *L);
-void script_summary(lua_State *, uint64_t, uint64_t, uint64_t);
+void script_summary(lua_State *, uint64_t, uint64_t, uint64_t, uint64_t);
 void script_errors(lua_State *, errors *);
 
 void script_copy_value(lua_State *, lua_State *, int);
