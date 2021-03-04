@@ -25,6 +25,13 @@ SSL_CTX *ssl_init() {
     return ctx;
 }
 
+status ssl_set_cipher_list(SSL_CTX *ctx, char *ciphers) {
+    if (SSL_CTX_set_cipher_list(ctx, ciphers) == 0) {
+        return ERROR;
+    }
+    return OK;
+}
+
 status ssl_connect(connection *c, char *host) {
     int r;
     SSL_set_fd(c->ssl, c->fd);
