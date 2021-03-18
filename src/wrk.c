@@ -260,6 +260,7 @@ static int connect_socket(thread *thread, connection *c) {
         if (try_ip_bind_address_no_port) {
             flags = 1;
             if (setsockopt(fd, IPPROTO_IP, IP_BIND_ADDRESS_NO_PORT, &flags, sizeof(flags)) == -1) {
+                warn("setsockopt(IP_BIND_ADDRESS_NO_PORT)");
                 if (errno == EOPNOTSUPP || errno == ENOPROTOOPT)
                     try_ip_bind_address_no_port = 0;
             }
