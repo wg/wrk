@@ -113,6 +113,8 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
 
+        memcpy(&t->bind_range, &cfg.bind_range, sizeof(cfg.bind_range));
+
         t->L = script_create(cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
 
@@ -250,7 +252,7 @@ static int connect_socket(thread *thread, connection *c) {
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
-    if (cfg.bind_range.count > 0) {
+    if (thread->bind_range.count > 0) {
         struct sockaddr_in source;
 
 #ifdef HAS_IP_BIND_ADDRESS_NO_PORT
@@ -266,13 +268,13 @@ static int connect_socket(thread *thread, connection *c) {
 
         memset(&source, 0, sizeof(source));
         source.sin_family = AF_INET;
-        source.sin_addr.s_addr = ntohl(cfg.bind_range.ip++);
+        source.sin_addr.s_addr = ntohl(thread->bind_range.ip++);
 
         if (bind(fd, (struct sockaddr *) &source, sizeof(source)) == -1)
             err(1, "bind(%s)", inet_ntoa(source.sin_addr));
 
-        if (cfg.bind_range.ip > cfg.bind_range.last_ip)
-            cfg.bind_range.ip = cfg.bind_range.first_ip;
+        if (thread->bind_range.ip > thread->bind_range.last_ip)
+            thread->bind_range.ip = thread->bind_range.first_ip;
     }
 
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
