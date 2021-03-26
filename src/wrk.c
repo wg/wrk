@@ -60,7 +60,7 @@ static void usage() {
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -Z, --ssl-cipher  <S>  SSL/TLS cipher suite       \n"
            "    -f, --ssl-proto   <S>  SSL/TLS protocol           \n"
-           "                           (SSL3, TLS1, TLS1.1, TLS1.2" TLS1_3_HELP_MSG " or ALL)\n"
+           "                           (SSL3, TLS1, TLS1.1, TLS1.2" TLS1_3_HELP_MSG ", or ALL)\n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -543,6 +543,8 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 } else if (strcasecmp(optarg, "TLS1.3") == 0) {
                     cfg->ssl_proto_version = TLS1_3_VERSION;
 #endif
+                } else if (strcasecmp(optarg, "ALL") == 0) {
+                    cfg->ssl_proto_version = 0;
                 } else {
                     fprintf(stderr, "invalid SSL/TLS protocol: %s\n", optarg);
                     return -1;
