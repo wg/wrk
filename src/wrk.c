@@ -16,8 +16,8 @@ static struct config {
     char    *host;
     char    *script;
     SSL_CTX *ctx;
-    WRK_SSL_METHOD_CONST SSL_METHOD *ssl_method;
-    char *ssl_cipher;
+    int      ssl_proto_version;
+    char    *ssl_cipher;
 } cfg;
 
 static struct {
@@ -44,16 +44,8 @@ static void handler(int sig) {
 }
 
 static void usage() {
-#ifndef OPENSSL_NO_SSL2
-#define SSL2_HELP_MSG "SSL2, "
-#else
-#define SSL2_HELP_MSG ""
-#endif
-
-#ifdef HAVE_TLSV1_X
-#define TLS1_X_HELP_MSG ", TLS1.1, TLS1.2"
-#else
-#define TLS1_X_HELP_MSG ""
+#ifdef TLS1_3_VERSION
+#define TLS1_3_HELP_MSG ", TLS1.3"
 #endif
 
     printf("Usage: wrk <options> <url>                            \n"
@@ -68,7 +60,7 @@ static void usage() {
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -Z, --ssl-cipher  <S>  SSL/TLS cipher suite       \n"
            "    -f, --ssl-proto   <S>  SSL/TLS protocol           \n"
-           "                           (" SSL2_HELP_MSG "SSL3, TLS1" TLS1_X_HELP_MSG " or ALL)\n"
+           "                           (SSL3, TLS1, TLS1.1, TLS1.2" TLS1_3_HELP_MSG " or ALL)\n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -90,7 +82,7 @@ int main(int argc, char **argv) {
     char *service = port ? port : schema;
 
     if (!strncmp("https", schema, 5)) {
-        if ((cfg.ctx = ssl_init(cfg.ssl_method, cfg.ssl_cipher)) == NULL) {
+        if ((cfg.ctx = ssl_init(cfg.ssl_proto_version, cfg.ssl_cipher)) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
             exit(1);
@@ -507,7 +499,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
-    cfg->ssl_method  = SSLv23_client_method();
+    cfg->ssl_proto_version = 0;
     cfg->ssl_cipher  = NULL;
 
     while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrvf:Z:?", longopts, NULL)) != -1) {
@@ -539,22 +531,18 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 printf("Copyright (C) 2012 Will Glozer\n");
                 break;
             case 'f':
-                if (strcasecmp(optarg, "ALL") == 0) {
-                    cfg->ssl_method = SSLv23_client_method();
-#ifndef OPENSSL_NO_SSL2
-                } else if (strcasecmp(optarg, "SSL2") == 0) {
-                    cfg->ssl_method = SSLv2_client_method();
-#endif
-                } else if (strcasecmp(optarg, "SSL3") == 0) {
-                    cfg->ssl_method = SSLv3_client_method();
-#ifdef HAVE_TLSV1_X
-                } else if (strcasecmp(optarg, "TLS1.1") == 0) {
-                    cfg->ssl_method = TLSv1_1_client_method();
-                } else if (strcasecmp(optarg, "TLS1.2") == 0) {
-                    cfg->ssl_method = TLSv1_2_client_method();
-#endif
+                if (strcasecmp(optarg, "SSL3") == 0) {
+                    cfg->ssl_proto_version = SSL3_VERSION;
                 } else if (strcasecmp(optarg, "TLS1") == 0) {
-                    cfg->ssl_method = TLSv1_client_method();
+                    cfg->ssl_proto_version = TLS1_VERSION;
+                } else if (strcasecmp(optarg, "TLS1.1") == 0) {
+                    cfg->ssl_proto_version = TLS1_1_VERSION;
+                } else if (strcasecmp(optarg, "TLS1.2") == 0) {
+                    cfg->ssl_proto_version = TLS1_2_VERSION;
+#ifdef TLS1_3_VERSION
+                } else if (strcasecmp(optarg, "TLS1.3") == 0) {
+                    cfg->ssl_proto_version = TLS1_3_VERSION;
+#endif
                 } else {
                     fprintf(stderr, "invalid SSL/TLS protocol: %s\n", optarg);
                     return -1;

@@ -12,16 +12,6 @@
 #include <openssl/err.h>
 #include <lua.h>
 
-#ifdef SSL_OP_NO_TLSv1_2
-#define HAVE_TLSV1_X
-#endif
-
-#if (OPENSSL_VERSION_NUMBER >= 0x00909000)
-#define WRK_SSL_METHOD_CONST const
-#else
-#define WRK_SSL_METHOD_CONST
-#endif
-
 #include "stats.h"
 #include "ae.h"
 #include "http_parser.h"
