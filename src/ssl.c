@@ -43,13 +43,13 @@ SSL_CTX *ssl_init(int ssl_proto_version, char *ssl_cipher) {
 #endif
     }
 
-    if (ssl_cipher != NULL) 
-        fprintf(stderr, "SETTING CIPHER: %s\n", ssl_cipher);
+    if (ssl_cipher != NULL) {
         if (!SSL_CTX_set_cipher_list(ctx, ssl_cipher)) {
             fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
             ERR_print_errors_fp(stderr);
             exit(1);
         }
+    }
 
     return ctx;
 }
