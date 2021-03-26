@@ -26,20 +26,20 @@ static void set_fields(lua_State *, int, const table_field *);
 static void set_field(lua_State *, int, char *, int);
 static int push_url_part(lua_State *, char *, struct http_parser_url *, enum http_parser_url_fields);
 
-static const struct luaL_reg addrlib[] = {
+static const struct luaL_Reg addrlib[] = {
     { "__tostring", script_addr_tostring   },
     { "__gc"    ,   script_addr_gc         },
     { NULL,         NULL                   }
 };
 
-static const struct luaL_reg statslib[] = {
+static const struct luaL_Reg statslib[] = {
     { "__call",     script_stats_call      },
     { "__index",    script_stats_index     },
     { "__len",      script_stats_len       },
     { NULL,         NULL                   }
 };
 
-static const struct luaL_reg threadlib[] = {
+static const struct luaL_Reg threadlib[] = {
     { "__index",    script_thread_index    },
     { "__newindex", script_thread_newindex },
     { NULL,         NULL                   }
@@ -492,8 +492,8 @@ void script_copy_value(lua_State *src, lua_State *dst, int index) {
             lua_newtable(dst);
             lua_pushnil(src);
             while (lua_next(src, index - 1)) {
-                script_copy_value(src, dst, -1);
                 script_copy_value(src, dst, -2);
+                script_copy_value(src, dst, -1);
                 lua_settable(dst, -3);
                 lua_pop(src, 1);
             }

@@ -8,57 +8,56 @@
 
 #include "ssl.h"
 
-static pthread_mutex_t *locks;
-
-static void ssl_lock(int mode, int n, const char *file, int line) {
-    pthread_mutex_t *lock = &locks[n];
-    if (mode & CRYPTO_LOCK) {
-        pthread_mutex_lock(lock);
-    } else {
-        pthread_mutex_unlock(lock);
-    }
-}
-
-static unsigned long ssl_id() {
-    return (unsigned long) pthread_self();
-}
-
-SSL_CTX *ssl_init(SSL_METHOD *ssl_method, char *ssl_cipher) {
+SSL_CTX *ssl_init(int ssl_proto_version, char *ssl_cipher) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
     SSL_library_init();
     OpenSSL_add_all_algorithms();
 
-    if ((locks = calloc(CRYPTO_num_locks(), sizeof(pthread_mutex_t)))) {
-        for (int i = 0; i < CRYPTO_num_locks(); i++) {
-            pthread_mutex_init(&locks[i], NULL);
-        }
+    ctx = SSL_CTX_new(SSLv23_method());
 
-        CRYPTO_set_locking_callback(ssl_lock);
-        CRYPTO_set_id_callback(ssl_id);
-
-        if ((ctx = SSL_CTX_new(ssl_method))) {
-            SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-            SSL_CTX_set_verify_depth(ctx, 0);
-            SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
-            SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
-            if (ssl_cipher != NULL) {
-                if (!SSL_CTX_set_cipher_list(ctx, ssl_cipher)) {
-                    fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
-                    ERR_print_errors_fp(stderr);
-                    exit(1);
-                }
-            }
-        }
+    if (ctx == NULL) {
+        return NULL;
     }
+
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    SSL_CTX_set_verify_depth(ctx, 0);
+    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+
+    if (ssl_proto_version == 0) {
+#ifdef SSL_CTX_set_min_proto_version
+        SSL_CTX_set_min_proto_version(ctx, 0);
+#ifdef TLS1_3_VERSION
+        SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+#else
+        SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+#endif
+#endif
+
+    } else {
+#ifdef SSL_CTX_set_min_proto_version
+        SSL_CTX_set_min_proto_version(ctx, ssl_proto_version);
+        SSL_CTX_set_max_proto_version(ctx, ssl_proto_version);
+#endif
+    }
+
+    if (ssl_cipher != NULL) 
+        fprintf(stderr, "SETTING CIPHER: %s\n", ssl_cipher);
+        if (!SSL_CTX_set_cipher_list(ctx, ssl_cipher)) {
+            fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
 
     return ctx;
 }
 
-status ssl_connect(connection *c) {
+status ssl_connect(connection *c, char *host) {
     int r;
     SSL_set_fd(c->ssl, c->fd);
+    SSL_set_tlsext_host_name(c->ssl, host);
     if ((r = SSL_connect(c->ssl)) != 1) {
         switch (SSL_get_error(c->ssl, r)) {
             case SSL_ERROR_WANT_READ:  return RETRY;
