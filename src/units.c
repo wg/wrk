@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <strings.h>
 #include <inttypes.h>
+#include <arpa/inet.h>
 
 #include "units.h"
 #include "aprintf.h"
@@ -101,4 +102,51 @@ int scan_metric(char *s, uint64_t *n) {
 
 int scan_time(char *s, uint64_t *n) {
     return scan_units(s, n, &time_units_s);
+}
+
+int scan_cidr_range(char *s, cidr_range *cr) {
+    int rc;
+    unsigned int ip[4], bits;
+    uint32_t base, mask;
+    struct in_addr sin;
+
+    rc = sscanf(s, "%u.%u.%u.%u/%u", &ip[0], &ip[1], &ip[2], &ip[3], &bits);
+
+    if (rc < 4) {
+        fprintf(stderr, "could not parse range: %s\n", s);
+        return -1;
+    }
+
+    if (rc == 4)
+        bits = 32;
+
+    if (bits > 32) {
+        fprintf(stderr, "invalid mask in range: %s\n", s);
+        return -1;
+    }
+
+    base =
+        (ip[0] << 24UL) |
+        (ip[1] << 16UL) |
+        (ip[2] << 8UL) |
+        (ip[3]);
+
+    mask = (0xFFFFFFFFUL << (32 - bits)) & 0xFFFFFFFFUL;
+
+    cr->first_ip = base & mask;
+    cr->last_ip = cr->first_ip | ~mask;
+
+    if (cr->first_ip != base) {
+        sin.s_addr = ntohl(cr->first_ip);
+        fprintf(stderr, "warning: low address bits of %s are meaningless, using %s/%d\n", s, inet_ntoa(sin), bits);
+    }
+
+    /* exclude base network address for masks < 32 */
+    if (bits < 32)
+        cr->first_ip++;
+
+    cr->count = (bits == 32) ? 1 : cr->last_ip - cr->first_ip;
+    cr->ip = cr->first_ip;
+
+    return 0;
 }

@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <err.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -15,6 +17,7 @@
 #include "stats.h"
 #include "ae.h"
 #include "http_parser.h"
+#include "units.h"
 
 #define RECVBUF  8192
 
@@ -36,6 +39,7 @@ typedef struct {
     lua_State *L;
     errors errors;
     struct connection *cs;
+    cidr_range bind_range;
 } thread;
 
 typedef struct {
