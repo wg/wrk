@@ -46,6 +46,8 @@ static void handler(int sig) {
 static void usage() {
 #ifdef TLS1_3_VERSION
 #define TLS1_3_HELP_MSG ", TLS1.3"
+#else
+#define TLS1_3_HELP_MSG ""
 #endif
 
     printf("Usage: wrk <options> <url>                            \n"
