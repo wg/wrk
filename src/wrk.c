@@ -16,6 +16,8 @@ static struct config {
     char    *host;
     char    *script;
     SSL_CTX *ctx;
+    int      ssl_proto_version;
+    char    *ssl_cipher;
 } cfg;
 
 static struct {
@@ -42,6 +44,12 @@ static void handler(int sig) {
 }
 
 static void usage() {
+#ifdef TLS1_3_VERSION
+#define TLS1_3_HELP_MSG ", TLS1.3"
+#else
+#define TLS1_3_HELP_MSG ""
+#endif
+
     printf("Usage: wrk <options> <url>                            \n"
            "  Options:                                            \n"
            "    -c, --connections <N>  Connections to keep open   \n"
@@ -52,6 +60,9 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
+           "    -Z, --ssl-cipher  <S>  SSL/TLS cipher suite       \n"
+           "    -f, --ssl-proto   <S>  SSL/TLS protocol           \n"
+           "                           (SSL3, TLS1, TLS1.1, TLS1.2" TLS1_3_HELP_MSG ", or ALL)\n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -73,7 +84,7 @@ int main(int argc, char **argv) {
     char *service = port ? port : schema;
 
     if (!strncmp("https", schema, 5)) {
-        if ((cfg.ctx = ssl_init()) == NULL) {
+        if ((cfg.ctx = ssl_init(cfg.ssl_proto_version, cfg.ssl_cipher)) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
             exit(1);
@@ -474,6 +485,8 @@ static struct option longopts[] = {
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
+    { "ssl-cipher",  required_argument, NULL, 'Z' },
+    { "ssl-proto",   required_argument, NULL, 'f' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
@@ -488,8 +501,10 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->ssl_proto_version = 0;
+    cfg->ssl_cipher  = NULL;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrvf:Z:?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -516,6 +531,29 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
+                break;
+            case 'f':
+                if (strcasecmp(optarg, "SSL3") == 0) {
+                    cfg->ssl_proto_version = SSL3_VERSION;
+                } else if (strcasecmp(optarg, "TLS1") == 0) {
+                    cfg->ssl_proto_version = TLS1_VERSION;
+                } else if (strcasecmp(optarg, "TLS1.1") == 0) {
+                    cfg->ssl_proto_version = TLS1_1_VERSION;
+                } else if (strcasecmp(optarg, "TLS1.2") == 0) {
+                    cfg->ssl_proto_version = TLS1_2_VERSION;
+#ifdef TLS1_3_VERSION
+                } else if (strcasecmp(optarg, "TLS1.3") == 0) {
+                    cfg->ssl_proto_version = TLS1_3_VERSION;
+#endif
+                } else if (strcasecmp(optarg, "ALL") == 0) {
+                    cfg->ssl_proto_version = 0;
+                } else {
+                    fprintf(stderr, "invalid SSL/TLS protocol: %s\n", optarg);
+                    return -1;
+                }
+                break;
+            case 'Z':
+                cfg->ssl_cipher = optarg;
                 break;
             case 'h':
             case '?':

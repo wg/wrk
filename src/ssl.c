@@ -8,18 +8,47 @@
 
 #include "ssl.h"
 
-SSL_CTX *ssl_init() {
+SSL_CTX *ssl_init(int ssl_proto_version, char *ssl_cipher) {
     SSL_CTX *ctx = NULL;
 
     SSL_load_error_strings();
     SSL_library_init();
     OpenSSL_add_all_algorithms();
 
-    if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
-        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-        SSL_CTX_set_verify_depth(ctx, 0);
-        SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
-        SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+    ctx = SSL_CTX_new(SSLv23_method());
+
+    if (ctx == NULL) {
+        return NULL;
+    }
+
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+    SSL_CTX_set_verify_depth(ctx, 0);
+    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_CLIENT);
+
+    if (ssl_proto_version == 0) {
+#ifdef SSL_CTX_set_min_proto_version
+        SSL_CTX_set_min_proto_version(ctx, 0);
+#ifdef TLS1_3_VERSION
+        SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+#else
+        SSL_CTX_set_max_proto_version(ctx, TLS1_2_VERSION);
+#endif
+#endif
+
+    } else {
+#ifdef SSL_CTX_set_min_proto_version
+        SSL_CTX_set_min_proto_version(ctx, ssl_proto_version);
+        SSL_CTX_set_max_proto_version(ctx, ssl_proto_version);
+#endif
+    }
+
+    if (ssl_cipher != NULL) {
+        if (!SSL_CTX_set_cipher_list(ctx, ssl_cipher)) {
+            fprintf(stderr, "error setting cipher list [%s]\n", ssl_cipher);
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
     }
 
     return ctx;
