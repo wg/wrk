@@ -11,7 +11,7 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include <luajit-2.0/lua.h>
+#include <lua.h>
 
 #include "stats.h"
 #include "ae.h"
