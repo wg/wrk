@@ -240,6 +240,10 @@ static int connect_socket(thread *thread, connection *c) {
 
     fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 
+    if (fd == -1) {
+        err(1, "socket()");
+    }
+
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
