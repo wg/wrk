@@ -13,6 +13,7 @@ static struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     tls_session_reuse;
     char    *host;
     char    *script;
     SSL_CTX *ctx;
@@ -52,6 +53,7 @@ static void usage() {
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
+           "    -r, --reuse       <R>  Enable TLS session reuse   \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
            "  Numeric arguments may include a SI unit (1k, 1M, 1G)\n"
@@ -73,7 +75,7 @@ int main(int argc, char **argv) {
     char *service = port ? port : schema;
 
     if (!strncmp("https", schema, 5)) {
-        if ((cfg.ctx = ssl_init()) == NULL) {
+        if ((cfg.ctx = ssl_init(cfg.tls_session_reuse)) == NULL) {
             fprintf(stderr, "unable to initialize SSL\n");
             ERR_print_errors_fp(stderr);
             exit(1);
@@ -136,7 +138,13 @@ int main(int argc, char **argv) {
 
     char *time = format_time_s(cfg.duration);
     printf("Running %s test @ %s\n", time, url);
-    printf("  %"PRIu64" threads and %"PRIu64" connections\n", cfg.threads, cfg.connections);
+    printf("  %"PRIu64" threads and %"PRIu64" connections", cfg.threads, cfg.connections);
+
+    if (cfg.ctx) {
+        printf(" (TLS session reuse %s)", cfg.tls_session_reuse ? "enabled" : "disabled");
+    }
+
+    printf("\n");
 
     uint64_t start    = time_us();
     uint64_t complete = 0;
@@ -190,6 +198,19 @@ int main(int argc, char **argv) {
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
+    if (cfg.ctx) {
+        printf("TLS new conn %lu reused %lu miss %lu finished conn %lu sess_cb_hit %lu renegotiation %lu timeout %lu full remove %lu\n",
+            SSL_CTX_sess_connect(cfg.ctx),
+            SSL_CTX_sess_hits(cfg.ctx),
+            SSL_CTX_sess_misses(cfg.ctx),
+            SSL_CTX_sess_connect_good(cfg.ctx),
+            SSL_CTX_sess_cb_hits(cfg.ctx),
+            SSL_CTX_sess_connect_renegotiate(cfg.ctx),
+            SSL_CTX_sess_timeouts(cfg.ctx),
+            SSL_CTX_sess_cache_full(cfg.ctx)
+        );
+    }
+
     if (script_has_done(L)) {
         script_summary(L, runtime_us, complete, bytes);
         script_errors(L, &errors);
@@ -214,7 +235,6 @@ void *thread_main(void *arg) {
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread = thread;
-        c->ssl     = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request = request;
         c->length  = length;
         c->delayed = cfg.delay;
@@ -227,6 +247,7 @@ void *thread_main(void *arg) {
     thread->start = time_us();
     aeMain(loop);
 
+    SSL_SESSION_free(thread->cache.cached_session);
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
 
@@ -249,6 +270,12 @@ static int connect_socket(thread *thread, connection *c) {
 
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+
+    if (cfg.ctx) {
+        c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
+        SSL_set_ex_data(c->ssl, ssl_data_index, c);
+        c->cache = cfg.tls_session_reuse ? &thread->cache : NULL;
+    }
 
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
@@ -475,6 +502,7 @@ static struct option longopts[] = {
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
+    { "reuse",       no_argument,       NULL, 'r' },
     { "version",     no_argument,       NULL, 'v' },
     { NULL,          0,                 NULL,  0  }
 };
@@ -516,6 +544,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());
                 printf("Copyright (C) 2012 Will Glozer\n");
+                break;
+            case 'r':
+                cfg->tls_session_reuse = true;
                 break;
             case 'h':
             case '?':
