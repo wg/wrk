@@ -69,7 +69,7 @@ status ssl_close(connection *c) {
     SSL_shutdown(c->ssl);
     SSL_clear(c->ssl);
     SSL_free(c->ssl);
-    c->ssl=NULL;
+    c->ssl = NULL;
     return OK;
 }
 
