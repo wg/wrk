@@ -1,10 +1,19 @@
+local hdr_mt = {
+   __newindex=function(t,k,v)
+      rawset(t,k:lower(),v)
+   end,
+   __index=function(t,k)
+      return rawget(t,k:lower())
+   end
+}
+
 local wrk = {
    scheme  = "http",
    host    = "localhost",
    port    = nil,
    method  = "GET",
    path    = "/",
-   headers = {},
+   headers = setmetatable({}, hdr_mt),
    body    = nil,
    thread  = nil,
 }
@@ -53,6 +62,13 @@ function wrk.format(method, path, headers, body)
    local headers = headers or wrk.headers
    local body    = body    or wrk.body
    local s       = {}
+
+   local tmp = setmetatable({}, hdr_mt)
+   for name, value in pairs(headers) do
+      tmp[name] = value
+   end
+
+   headers = tmp
 
    if not headers["Host"] then
       headers["Host"] = wrk.headers["Host"]

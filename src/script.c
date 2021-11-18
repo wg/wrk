@@ -1,5 +1,6 @@
 // Copyright (C) 2013 - Will Glozer.  All rights reserved.
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include "script.h"
@@ -82,9 +83,12 @@ lua_State *script_create(char *file, char *url, char **headers) {
     lua_getfield(L, 4, "headers");
     for (char **h = headers; *h; h++) {
         char *p = strchr(*h, ':');
-        if (p && p[1] == ' ') {
+        if (p) {
             lua_pushlstring(L, *h, p - *h);
-            lua_pushstring(L, p + 2);
+            p++;
+            while (isblank(*p))
+               p++;
+            lua_pushstring(L, p);
             lua_settable(L, 5);
         }
     }
