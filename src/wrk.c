@@ -21,6 +21,7 @@ static struct config {
 static struct {
     stats *latency;
     stats *requests;
+    stats *ttfb;
 } statistics;
 
 static struct sock sock = {
@@ -90,6 +91,7 @@ int main(int argc, char **argv) {
 
     statistics.latency  = stats_alloc(cfg.timeout * 1000);
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
+    statistics.ttfb = stats_alloc(MAX_THREAD_RATE_S);
     thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
     lua_State *L = script_create(cfg.script, url, headers);
@@ -173,6 +175,7 @@ int main(int argc, char **argv) {
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
+    print_stats("TTFB", statistics.ttfb, format_time_us);
     if (cfg.latency) print_stats_latency(statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
@@ -275,7 +278,7 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
 
     if (thread->requests > 0) {
         uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
-        uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000;
+        uint64_t requests = (thread->requests / (double) elapsed_ms) * 1000; // req/s
 
         stats_record(statistics.requests, requests);
 
@@ -425,6 +428,12 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
+
+    // Time to first byte
+    if (c->body.length == 0) {
+        stats_record(statistics.ttfb, time_us() - c->start);
+    }
+
     size_t n;
 
     do {
