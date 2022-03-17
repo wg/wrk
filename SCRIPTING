@@ -59,7 +59,7 @@ Setup
     thread:stop()           - stop the thread
 
   Only boolean, nil, number, and string values or tables of the same may be
-  transfered via get()/set() and thread:stop() can only be called while the
+  transferred via get()/set() and thread:stop() can only be called while the
   thread is running.
 
 Running

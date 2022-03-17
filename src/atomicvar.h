@@ -16,12 +16,12 @@
  *  pthread_mutex_t myvar_mutex;
  *  atomicSet(myvar,12345);
  *
- * If atomic primitives are availble (tested in config.h) the mutex
+ * If atomic primitives are available (tested in config.h) the mutex
  * is not used.
  *
  * Never use return value from the macros, instead use the AtomicGetIncr()
  * if you need to get the current value and increment it atomically, like
- * in the followign example:
+ * in the following example:
  *
  *  long oldvalue;
  *  atomicGetIncr(myvar,oldvalue,1);
