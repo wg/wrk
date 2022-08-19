@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "script.h"
 #include "http_parser.h"
 #include "zmalloc.h"
@@ -19,6 +20,8 @@ static int script_stats_len(lua_State *);
 static int script_stats_index(lua_State *);
 static int script_thread_index(lua_State *);
 static int script_thread_newindex(lua_State *);
+static int script_clock_real_time(lua_State *);
+static int script_clock_monotonic(lua_State *);
 static int script_wrk_lookup(lua_State *);
 static int script_wrk_connect(lua_State *);
 
@@ -45,6 +48,12 @@ static const struct luaL_Reg threadlib[] = {
     { NULL,         NULL                   }
 };
 
+static const struct luaL_Reg clocklib[] = {
+    { "realtime",      script_clock_real_time      },
+    { "monotonic",     script_clock_monotonic      },
+    { NULL,            NULL                        }
+};
+
 lua_State *script_create(char *file, char *url, char **headers) {
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
@@ -56,6 +65,8 @@ lua_State *script_create(char *file, char *url, char **headers) {
     luaL_register(L, NULL, statslib);
     luaL_newmetatable(L, "wrk.thread");
     luaL_register(L, NULL, threadlib);
+
+    luaL_register(L, "clock", clocklib);
 
     struct http_parser_url parts = {};
     script_parse_url(url, &parts);
@@ -74,12 +85,12 @@ lua_State *script_create(char *file, char *url, char **headers) {
 
     lua_getglobal(L, "wrk");
 
-    set_field(L, 4, "scheme", push_url_part(L, url, &parts, UF_SCHEMA));
-    set_field(L, 4, "host",   push_url_part(L, url, &parts, UF_HOST));
-    set_field(L, 4, "port",   push_url_part(L, url, &parts, UF_PORT));
-    set_fields(L, 4, fields);
+    set_field(L, 5, "scheme", push_url_part(L, url, &parts, UF_SCHEMA));
+    set_field(L, 5, "host",   push_url_part(L, url, &parts, UF_HOST));
+    set_field(L, 5, "port",   push_url_part(L, url, &parts, UF_PORT));
+    set_fields(L, 5, fields);
 
-    lua_getfield(L, 4, "headers");
+    lua_getfield(L, 5, "headers");
     for (char **h = headers; *h; h++) {
         char *p = strchr(*h, ':');
         if (p && p[1] == ' ') {
@@ -88,7 +99,7 @@ lua_State *script_create(char *file, char *url, char **headers) {
             lua_settable(L, 5);
         }
     }
-    lua_pop(L, 5);
+    lua_pop(L, 6);
 
     if (file && luaL_dofile(L, file)) {
         const char *cause = lua_tostring(L, -1);
@@ -435,6 +446,25 @@ static int script_thread_newindex(lua_State *L) {
     }
     return 0;
 }
+
+static int script_clock_real_time(lua_State *L) {
+    struct timespec t = {0, 0};
+    uint64_t now = 0;
+    clock_gettime(CLOCK_REALTIME, &t);
+    now = t.tv_sec * 1000000 + t.tv_nsec/1000;
+    lua_pushnumber(L, now);
+    return 1;
+}
+
+static int script_clock_monotonic(lua_State *L) {
+    struct timespec t = {0, 0};
+    uint64_t now = 0;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    now = t.tv_sec * 1000000 + t.tv_nsec/1000;
+    lua_pushnumber(L, now);
+    return 1;
+}
+
 
 static int script_wrk_lookup(lua_State *L) {
     struct addrinfo *addrs;
