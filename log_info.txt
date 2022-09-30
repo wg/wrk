@@ -1,0 +1,87 @@
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   927.31ms  323.11ms   1.72s    82.98%
+    Req/Sec    47.36     58.63   313.00     85.40%
+  3261 requests in 10.07s, 7.12MB read
+  Socket errors: connect 0, read 0, write 0, timeout 1
+Requests/sec:    323.91
+Transfer/sec:    723.92KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   970.03ms  298.18ms   1.88s    83.78%
+    Req/Sec    41.24     46.99   260.00     84.68%
+  2734 requests in 10.05s, 5.97MB read
+  Socket errors: connect 0, read 0, write 0, timeout 2
+Requests/sec:    272.06
+Transfer/sec:    608.28KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   934.91ms  318.78ms   1.88s    85.81%
+    Req/Sec    45.32     52.28   390.00     85.87%
+  3324 requests in 10.07s, 7.25MB read
+  Socket errors: connect 0, read 0, write 0, timeout 5
+Requests/sec:    329.98
+Transfer/sec:    737.34KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   866.90ms  363.76ms   1.21s    79.20%
+    Req/Sec    56.06     56.67   300.00     87.30%
+  3727 requests in 10.06s, 8.13MB read
+  Socket errors: connect 0, read 0, write 0, timeout 1
+Requests/sec:    370.58
+Transfer/sec:    827.86KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   936.88ms  305.36ms   1.71s    85.45%
+    Req/Sec    63.49     66.30   323.00     85.67%
+  3465 requests in 10.08s, 7.59MB read
+  Socket errors: connect 0, read 0, write 0, timeout 16
+Requests/sec:    343.67
+Transfer/sec:    770.61KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   905.91ms  358.75ms   1.72s    79.06%
+    Req/Sec    60.41     65.53   330.00     85.67%
+  3189 requests in 10.08s, 6.97MB read
+  Socket errors: connect 0, read 0, write 0, timeout 3
+Requests/sec:    316.35
+Transfer/sec:    707.73KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   910.08ms  362.12ms   1.70s    79.57%
+    Req/Sec    58.41     71.13   313.00     84.75%
+  2697 requests in 10.08s, 5.88MB read
+Requests/sec:    267.67
+Transfer/sec:    598.04KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   965.43ms  309.59ms   1.72s    84.85%
+    Req/Sec    51.29     56.46   323.00     88.12%
+  3120 requests in 10.09s, 6.80MB read
+  Socket errors: connect 0, read 0, write 0, timeout 17
+Requests/sec:    309.21
+Transfer/sec:    690.58KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.01s   199.34ms   1.21s    82.38%
+    Req/Sec    48.58     48.12   270.00     85.99%
+  3690 requests in 10.03s, 8.17MB read
+Requests/sec:    367.72
+Transfer/sec:    834.04KB
+Running 10s test @ http://192.168.1.67:8080
+  12 threads and 400 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   991.41ms  224.11ms   1.19s    85.57%
+    Req/Sec    72.06     67.60   303.00     73.63%
+  3742 requests in 10.10s, 8.16MB read
+Requests/sec:    370.53
+Transfer/sec:    827.89KB
