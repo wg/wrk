@@ -58,7 +58,9 @@ function wrk.format(method, path, headers, body)
       headers["Host"] = wrk.headers["Host"]
    end
 
-   headers["Content-Length"] = body and string.len(body)
+   if not headers["Transfer-Encoding"] then
+      headers["Content-Length"] = body and string.len(body)
+   end
 
    s[1] = string.format("%s %s HTTP/1.1", method, path)
    for name, value in pairs(headers) do
@@ -66,7 +68,15 @@ function wrk.format(method, path, headers, body)
    end
 
    s[#s+1] = ""
-   s[#s+1] = body or ""
+   if headers["Transfer-Encoding"] and body then
+      s[#s+1] = string.format("%x", string.len(body))
+      s[#s+1] = body
+      s[#s+1] = "0"
+      s[#s+1] = ""
+      s[#s+1] = ""
+   else
+      s[#s+1] = body or ""
+   end
 
    return table.concat(s, "\r\n")
 end
