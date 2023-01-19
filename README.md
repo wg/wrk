@@ -10,22 +10,22 @@
 
 ## Basic Usage
 
-    wrk -t12 -c400 -d30s http://127.0.0.1:8080/index.html
+    wrk -d5s -t12 -c100 https://dummyjson.com/products/1
 
   This runs a benchmark for 30 seconds, using 12 threads, and keeping
   400 HTTP connections open.
 
   Output:
 
-    Running 30s test @ http://127.0.0.1:8080/index.html
-      12 threads and 400 connections
+    Running 5s test @ https://dummyjson.com/products/1
+      12 threads and 100 connections
       Thread Stats   Avg      Stdev     Max   +/- Stdev
-        Latency   635.91us    0.89ms  12.92ms   93.69%
-        Req/Sec    56.20k     8.07k   62.00k    86.54%
-      22464657 requests in 30.00s, 17.76GB read
-    Requests/sec: 748868.53
-    Transfer/sec:    606.33MB
-
+        Latency    55.61ms   27.86ms   1.05s    97.92%
+        Req/Sec   145.24     21.22   190.00     87.82%
+        TTFB       54.48ms   13.68ms   1.05s    94.73%
+      8608 requests in 5.10s, 11.81MB read
+    Requests/sec:   1689.28
+    Transfer/sec:      2.32MB
 ## Command Line Options
 
     -c, --connections: total number of HTTP connections to keep open with
