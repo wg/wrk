@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 
     statistics.latency  = stats_alloc(cfg.timeout * 1000);
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
-    statistics.ttfb = stats_alloc(MAX_THREAD_RATE_S);
+    statistics.ttfb     = stats_alloc(MAX_THREAD_RATE_S);
     thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
     lua_State *L = script_create(cfg.script, url, headers);
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     print_stats_header();
     print_stats("Latency", statistics.latency, format_time_us);
     print_stats("Req/Sec", statistics.requests, format_metric);
-    print_stats("TTFB", statistics.ttfb, format_time_us);
+    print_stats("TTFB"   , statistics.ttfb, format_time_us);
     if (cfg.latency) print_stats_latency(statistics.latency);
 
     char *runtime_msg = format_time_us(runtime_us);
