@@ -1,8 +1,8 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 
-#include "wrk.h"
+#include "types.h"
 #include "script.h"
-#include "main.h"
+#include "wrk.h"
 
 static struct config {
     uint64_t connections;
@@ -59,7 +59,7 @@ static void usage() {
            "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
-int main(int argc, char **argv) {
+int wrk_run(int argc, char **argv) {
     char *url, **headers = zmalloc(argc * sizeof(char *));
     struct http_parser_url parts = {};
 

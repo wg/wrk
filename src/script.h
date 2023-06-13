@@ -7,7 +7,7 @@
 #include <lauxlib.h>
 #include <unistd.h>
 #include "stats.h"
-#include "wrk.h"
+#include "types.h"
 
 lua_State *script_create(char *, char *, char **);
 
