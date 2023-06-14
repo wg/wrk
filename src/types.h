@@ -8,7 +8,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include <lua.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
@@ -33,7 +32,6 @@ typedef struct {
   uint64_t requests;
   uint64_t bytes;
   uint64_t start;
-  lua_State *L;
   struct errors errors;
   struct connection *cs;
 } thread;

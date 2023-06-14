@@ -10,19 +10,14 @@ Overview
 
 Dependencies
 
-  wrk requires LuaJIT and OpenSSL and is distributed with appropriate
+  wrk requires OpenSSL and is distributed with appropriate
   versions that will be unpacked and built as necessary.
 
   If you are building wrk packages for an OS distribution or otherwise
   prefer to use system versions of dependencies you may specify their
   location when invoking make with one or more of:
 
-    WITH_LUAJIT
     WITH_OPENSSL
-
-  For example to use the system version of both libraries on Linux:
-
-    make WITH_LUAJIT=/usr WITH_OPENSSL=/usr
 
   Or to use the Homebrew version of OpenSSL on Mac OS X:
 

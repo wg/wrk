@@ -102,6 +102,7 @@ void wrk_run(char *url, char **headers, struct http_parser_url parts) {
   }
 
   runtime_us = time_us() - start;
+  printf("complete: %d, connections: %d, runtime_us: %d\n", complete, cfg.connections, runtime_us);
   if (complete / cfg.connections > 0) {
     int64_t interval = runtime_us / (complete / cfg.connections);
     stats_correct(statistics.latency, interval);

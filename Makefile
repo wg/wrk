@@ -1,4 +1,4 @@
-CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -shared
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -fPIC
 LIBS    := -lm -lssl -lcrypto -lpthread
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
@@ -40,7 +40,7 @@ endif
 all: $(BIN)
 
 clean:
-	$(RM) -rf $(BIN) obj/*
+	$(RM) -rf $(BIN) $(SHARED) obj/*
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
@@ -48,7 +48,7 @@ $(BIN): $(OBJ)
 
 $(SHARED): $(OBJ)
 	@echo LINK $(SHARED)
-	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+	@$(CC) $(LDFLAGS) -shared -o $@ $^ $(LIBS)
 
 $(OBJ): config.h Makefile $(DEPS) | $(ODIR)
 
@@ -87,5 +87,5 @@ $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 .SUFFIXES:
 .SUFFIXES: .c .o
 
-vpath %.c   src
-vpath %.h   src
+vpath %.c  src
+vpath %.h  src
