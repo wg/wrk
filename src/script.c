@@ -119,17 +119,11 @@ void script_push_thread(lua_State *L, thread *t) {
     lua_setmetatable(L, -2);
 }
 
-void script_init(lua_State *L, thread *t, int argc, char **argv) {
+void script_init(thread *t, int argc, char **argv) {
     lua_getglobal(t->L, "wrk");
 
     script_push_thread(t->L, t);
     lua_setfield(t->L, -2, "thread");
-
-    lua_getglobal(L, "wrk");
-    lua_getfield(L, -1, "setup");
-    script_push_thread(L, t);
-    lua_call(L, 1, 0);
-    lua_pop(L, 1);
 
     lua_getfield(t->L, -1, "init");
     lua_newtable(t->L);

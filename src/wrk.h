@@ -32,6 +32,8 @@ int wrk_run(int, char**);
 static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
 static int reconnect_socket(thread *, connection *);
+static void lookup_service(char*, char*, struct addrinfo**);
+static int parse_url(char*, struct http_parser_url*);
 
 static int record_rate(aeEventLoop *, long long, void *);
 
@@ -40,9 +42,6 @@ static void socket_writeable(aeEventLoop *, int, void *, int);
 static void socket_readable(aeEventLoop *, int, void *, int);
 
 static int response_complete(http_parser *);
-static int header_field(http_parser *, const char *, size_t);
-static int header_value(http_parser *, const char *, size_t);
-static int response_body(http_parser *, const char *, size_t);
 
 static uint64_t time_us();
 
