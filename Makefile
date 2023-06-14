@@ -1,4 +1,4 @@
-CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
+CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT -shared
 LIBS    := -lm -lssl -lcrypto -lpthread
 
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
@@ -20,6 +20,7 @@ endif
 SRC  := main.c wrk.c net.c ssl.c aprintf.c stats.c \
 		units.c ae.c zmalloc.c http_parser.c
 BIN  := wrk
+SHARED := wrk.so
 VER  ?= $(shell git describe --tags --always --dirty)
 
 ODIR := obj
@@ -43,6 +44,10 @@ clean:
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)
+	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+$(SHARED): $(OBJ)
+	@echo LINK $(SHARED)
 	@$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 $(OBJ): config.h Makefile $(DEPS) | $(ODIR)

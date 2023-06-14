@@ -22,26 +22,25 @@ struct option longopts[] = {{"connections", required_argument, NULL, 'c'},
 int main(int argc, char **argv) {
   char *url, **headers = zmalloc(argc * sizeof(char *));
   struct http_parser_url parts = {};
-  struct config conf;
 
-  if (parse_args(&conf, &url, &parts, headers, argc, argv)) {
+  if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
     usage();
     exit(1);
   }
 
-  char *time = format_time_s(conf.duration);
+  char *time = format_time_s(cfg.duration);
   printf("Running %s test @ %s\n", time, url);
-  printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", conf.threads,
-         conf.connections);
+  printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", cfg.threads,
+         cfg.connections);
 
-  int ret = wrk_run(url, headers, conf, parts);
+  wrk_run(url, headers, parts);
 
   long double runtime_s = runtime_us / 1000000.0;
   long double req_per_s = complete / runtime_s;
   long double bytes_per_s = bytes / runtime_s;
 
-  if (complete / conf.connections > 0) {
-    int64_t interval = runtime_us / (complete / conf.connections);
+  if (complete / cfg.connections > 0) {
+    int64_t interval = runtime_us / (complete / cfg.connections);
     stats_correct(statistics.latency, interval);
   }
 
@@ -67,7 +66,7 @@ int main(int argc, char **argv) {
   printf("Requests/sec: %9.2Lf\n", req_per_s);
   printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
-  return ret;
+  return 0;
 }
 
 void usage() {

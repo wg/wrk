@@ -1,7 +1,7 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
 #include "wrk.h"
-#include "types.h"
 #include "stats.h"
+#include "types.h"
 
 struct config cfg;
 uint64_t complete = 0;
@@ -23,10 +23,7 @@ static volatile sig_atomic_t stop = 0;
 
 static void handler(int sig) { stop = 1; }
 
-int wrk_run(char *url, char **headers, struct config conf,
-            struct http_parser_url parts) {
-  cfg = conf;
-
+void wrk_run(char *url, char **headers, struct http_parser_url parts) {
   char *schema = copy_url_part(url, &parts, UF_SCHEMA);
   char *host = copy_url_part(url, &parts, UF_HOST);
   char *port = copy_url_part(url, &parts, UF_PORT);
@@ -109,8 +106,6 @@ int wrk_run(char *url, char **headers, struct config conf,
     int64_t interval = runtime_us / (complete / cfg.connections);
     stats_correct(statistics.latency, interval);
   }
-
-  return 0;
 }
 
 void *thread_main(void *arg) {

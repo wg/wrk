@@ -25,13 +25,14 @@
 #include "units.h"
 #include "zmalloc.h"
 
+extern struct config cfg;
 extern struct statistics_t statistics;
 extern uint64_t complete;
 extern uint64_t bytes;
 extern uint64_t runtime_us;
 extern struct errors errors;
 
-int wrk_run(char *, char **, struct config, struct http_parser_url);
+void wrk_run(char *, char **, struct http_parser_url);
 
 static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
