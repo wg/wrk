@@ -1,15 +1,14 @@
 // Copyright (C) 2012 - Will Glozer.  All rights reserved.
-
 #include "wrk.h"
 #include "types.h"
+#include "stats.h"
 
 struct config cfg;
-
-static struct {
-  stats *latency;
-  stats *requests;
-  stats *ttfb;
-} statistics;
+uint64_t complete = 0;
+uint64_t bytes = 0;
+uint64_t runtime_us = 0;
+struct errors errors = {0};
+struct statistics_t statistics;
 
 static struct sock sock = {.connect = sock_connect,
                            .close = sock_close,
@@ -86,15 +85,7 @@ int wrk_run(char *url, char **headers, struct config conf,
   sigfillset(&sa.sa_mask);
   sigaction(SIGINT, &sa, NULL);
 
-  char *time = format_time_s(cfg.duration);
-  printf("Running %s test @ %s\n", time, url);
-  printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", cfg.threads,
-         cfg.connections);
-
   uint64_t start = time_us();
-  uint64_t complete = 0;
-  uint64_t bytes = 0;
-  errors errors = {0};
 
   sleep(cfg.duration);
   stop = 1;
@@ -113,38 +104,11 @@ int wrk_run(char *url, char **headers, struct config conf,
     errors.status += t->errors.status;
   }
 
-  uint64_t runtime_us = time_us() - start;
-  long double runtime_s = runtime_us / 1000000.0;
-  long double req_per_s = complete / runtime_s;
-  long double bytes_per_s = bytes / runtime_s;
-
+  runtime_us = time_us() - start;
   if (complete / cfg.connections > 0) {
     int64_t interval = runtime_us / (complete / cfg.connections);
     stats_correct(statistics.latency, interval);
   }
-
-  print_stats_header();
-  print_stats("Latency", statistics.latency, format_time_us);
-  print_stats("Req/Sec", statistics.requests, format_metric);
-  print_stats("TTFB", statistics.ttfb, format_time_us);
-  if (cfg.latency)
-    print_stats_latency(statistics.latency);
-
-  char *runtime_msg = format_time_us(runtime_us);
-
-  printf("  %" PRIu64 " requests in %s, %sB read\n", complete, runtime_msg,
-         format_binary(bytes));
-  if (errors.connect || errors.read || errors.write || errors.timeout) {
-    printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
-           errors.connect, errors.read, errors.write, errors.timeout);
-  }
-
-  if (errors.status) {
-    printf("  Non-2xx or 3xx responses: %d\n", errors.status);
-  }
-
-  printf("Requests/sec: %9.2Lf\n", req_per_s);
-  printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
   return 0;
 }
@@ -403,49 +367,6 @@ static char *copy_url_part(char *url, struct http_parser_url *parts,
   }
 
   return part;
-}
-
-static void print_stats_header() {
-  printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
-}
-
-static void print_units(long double n, char *(*fmt)(long double), int width) {
-  char *msg = fmt(n);
-  int len = strlen(msg), pad = 2;
-
-  if (isalpha(msg[len - 1]))
-    pad--;
-  if (isalpha(msg[len - 2]))
-    pad--;
-  width -= pad;
-
-  printf("%*.*s%.*s", width, width, msg, pad, "  ");
-
-  free(msg);
-}
-
-static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
-  uint64_t max = stats->max;
-  long double mean = stats_mean(stats);
-  long double stdev = stats_stdev(stats, mean);
-
-  printf("    %-10s", name);
-  print_units(mean, fmt, 8);
-  print_units(stdev, fmt, 10);
-  print_units(max, fmt, 9);
-  printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
-}
-
-static void print_stats_latency(stats *stats) {
-  long double percentiles[] = {50.0, 75.0, 90.0, 99.0};
-  printf("  Latency Distribution\n");
-  for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
-    long double p = percentiles[i];
-    uint64_t n = stats_percentile(stats, p);
-    printf("%7.0Lf%%", p);
-    print_units(n, format_time_us, 10);
-    printf("\n");
-  }
 }
 
 static void lookup_service(char *host, char *service,

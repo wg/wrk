@@ -21,22 +21,15 @@
 #include "aprintf.h"
 #include "ssl.h"
 #include "stats.h"
+#include "types.h"
 #include "units.h"
 #include "zmalloc.h"
 
-struct config {
-  uint64_t connections;
-  uint64_t duration;
-  uint64_t threads;
-  uint64_t timeout;
-  uint64_t pipeline;
-  bool delay;
-  bool dynamic;
-  bool latency;
-  char *host;
-  char *script;
-  SSL_CTX *ctx;
-};
+extern struct statistics_t statistics;
+extern uint64_t complete;
+extern uint64_t bytes;
+extern uint64_t runtime_us;
+extern struct errors errors;
 
 int wrk_run(char *, char **, struct config, struct http_parser_url);
 
@@ -57,9 +50,5 @@ static uint64_t time_us();
 
 static char *copy_url_part(char *, struct http_parser_url *,
                            enum http_parser_url_fields);
-
-static void print_stats_header();
-static void print_stats(char *, stats *, char *(*)(long double));
-static void print_stats_latency(stats *);
 
 #endif /* WRK_H */

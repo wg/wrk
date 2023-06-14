@@ -34,9 +34,15 @@ typedef struct {
   uint64_t bytes;
   uint64_t start;
   lua_State *L;
-  errors errors;
+  struct errors errors;
   struct connection *cs;
 } thread;
+
+struct statistics_t {
+  stats *latency;
+  stats *requests;
+  stats *ttfb;
+};
 
 typedef struct {
   char *buffer;
@@ -60,5 +66,19 @@ typedef struct connection {
   buffer body;
   char buf[RECVBUF];
 } connection;
+
+struct config {
+  uint64_t connections;
+  uint64_t duration;
+  uint64_t threads;
+  uint64_t timeout;
+  uint64_t pipeline;
+  bool delay;
+  bool dynamic;
+  bool latency;
+  char *host;
+  char *script;
+  SSL_CTX *ctx;
+};
 
 #endif /* TYPES_H */
