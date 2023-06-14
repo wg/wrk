@@ -23,20 +23,11 @@ BIN  := wrk
 VER  ?= $(shell git describe --tags --always --dirty)
 
 ODIR := obj
-OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/bytecode.o $(ODIR)/version.o
-LIBS := -lluajit-5.1 $(LIBS)
+OBJ  := $(patsubst %.c,$(ODIR)/%.o,$(SRC)) $(ODIR)/version.o
 
 DEPS    :=
 CFLAGS  += -I$(ODIR)/include
 LDFLAGS += -L$(ODIR)/lib
-
-ifneq ($(WITH_LUAJIT),)
-	CFLAGS  += -I$(WITH_LUAJIT)/include
-	LDFLAGS += -L$(WITH_LUAJIT)/lib
-else
-	CFLAGS  += -I$(ODIR)/include/luajit-2.1
-	DEPS    += $(ODIR)/lib/libluajit-5.1.a
-endif
 
 ifneq ($(WITH_OPENSSL),)
 	CFLAGS  += -I$(WITH_OPENSSL)/include
@@ -59,10 +50,6 @@ $(OBJ): config.h Makefile $(DEPS) | $(ODIR)
 $(ODIR):
 	@mkdir -p $@
 
-$(ODIR)/bytecode.c: src/wrk.lua $(DEPS)
-	@echo LUAJIT $<
-	@$(SHELL) -c 'PATH="obj/bin:$(PATH)" luajit -b "$(CURDIR)/$<" "$(CURDIR)/$@"'
-
 $(ODIR)/version.o:
 	@echo 'const char *VERSION="$(VER)";' | $(CC) -xc -c -o $@ -
 
@@ -72,22 +59,12 @@ $(ODIR)/%.o : %.c
 
 # Dependencies
 
-LUAJIT  := $(notdir $(patsubst %.zip,%,$(wildcard deps/LuaJIT*.zip)))
 OPENSSL := $(notdir $(patsubst %.tar.gz,%,$(wildcard deps/openssl*.tar.gz)))
 
 OPENSSL_OPTS = no-shared no-psk no-srp no-dtls no-idea --prefix=$(abspath $(ODIR))
 
-$(ODIR)/$(LUAJIT): deps/$(LUAJIT).zip | $(ODIR)
-	echo $(LUAJIT)
-	@unzip -nd $(ODIR) $<
-
 $(ODIR)/$(OPENSSL): deps/$(OPENSSL).tar.gz | $(ODIR)
 	@tar -C $(ODIR) -xf $<
-
-$(ODIR)/lib/libluajit-5.1.a: $(ODIR)/$(LUAJIT)
-	@echo Building LuaJIT...
-	@$(MAKE) -C $< PREFIX=$(abspath $(ODIR)) BUILDMODE=static install
-	@cd $(ODIR)/bin && ln -s luajit-2.1.0-beta3 luajit
 
 $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 	@echo Building OpenSSL...
@@ -103,8 +80,7 @@ $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 .PHONY: $(ODIR)/version.o
 
 .SUFFIXES:
-.SUFFIXES: .c .o .lua
+.SUFFIXES: .c .o
 
 vpath %.c   src
 vpath %.h   src
-vpath %.lua scripts
