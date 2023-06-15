@@ -31,13 +31,15 @@ extern uint64_t complete;
 extern uint64_t bytes;
 extern uint64_t runtime_us;
 extern struct errors errors;
+extern char* request;
 
-void wrk_run(char *, char **, struct http_parser_url);
+int benchmark(char *);
+int parse_url(char*, struct http_parser_url*);
 
 static void *thread_main(void *);
 static int connect_socket(thread *, connection *);
 static int reconnect_socket(thread *, connection *);
-static void lookup_service(char *, char *, struct addrinfo **);
+static int lookup_service(char *, char *, struct addrinfo **);
 
 static int record_rate(aeEventLoop *, long long, void *);
 

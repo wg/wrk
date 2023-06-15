@@ -1,70 +1,65 @@
 import os
+from typing import TypedDict
+from urllib.parse import urlparse
 from ctypes import (
     Structure,
-    c_bool,
     c_char_p,
-    c_uint16,
     c_uint64,
     c_void_p,
     cdll,
-    pointer,
 )
 
 __version__ = "1.0.0"
 
+_lib = os.path.join(os.path.dirname(__file__), "wrk.so")
 
-class config(Structure):
+
+class Request(TypedDict):
+    url: str
+    method: str
+    data: str
+    headers: dict
+
+
+class Config(TypedDict):
+    connections: int
+    duration: int
+    threads: int
+    timeout: int
+
+
+class c_config(Structure):
     _fields_ = [
         ("connections", c_uint64),
         ("duration", c_uint64),
         ("threads", c_uint64),
         ("timeout", c_uint64),
-        ("pipeline", c_uint64),
-        ("delay", c_bool),
-        ("dynamic", c_bool),
-        ("latency", c_bool),
         ("host", c_char_p),
-        ("script", c_char_p),
         ("ctx", c_void_p),
     ]
 
 
-class field_data(Structure):
-    _fields_ = [
-        ("off", c_uint16),
-        ("len", c_uint16),
-    ]
+def benchmark(request: Request, config: Config):
+    wrk = cdll.LoadLibrary(_lib)
 
+    # prepare config and request
+    cfg = c_config.in_dll(wrk, "cfg")
+    http_message = c_char_p.in_dll(wrk, "request")
 
-class http_parser_url(Structure):
-    _fields_ = [
-        ("field_set", c_uint16),
-        ("port", c_uint16),
-        ("field_data", field_data * 7),
-    ]
+    cfg.connections = config.get("connections", 10)
+    cfg.duration = config.get("duration", 3)
+    cfg.threads = config.get("threads", 3)
+    cfg.timeout = config.get("timeout", 1)
 
-    def __init__(self):
-        self.port = c_uint16(0)
-        self.field_set = c_uint16(0)
+    url = request.get("url", "http://localhost")
 
-        init = [field_data(c_uint16(0), c_uint16(0)) for _ in range(7)]
-        self.field_data = (field_data * 7)(*init)
+    url_o = urlparse(url)
+    if "headers" in request:
+        headers_str = "\r\n" + "\r\n".join(request.get("headers", {}).items())
+    else:
+        headers_str = ""
+    http_message.value = f"{request.get('method', 'GET')} / HTTP/1.1\nHost: {url_o.hostname}:{url_o.port}{headers_str}\r\n\r\n".encode(
+        "utf-8"
+    )
 
-
-def run(url: str):
-    url = url.encode("ascii")
-    so = os.path.join(os.path.dirname(__file__), "wrk.so")
-    wrk = cdll.LoadLibrary(so)
-    raw_headers = ["content-length: 1", "x-code: 1"]
-    headers = (c_char_p * len(raw_headers))()
-    headers[:] = [item.encode("utf-8") for item in raw_headers]
-
-    cfg = config.in_dll(wrk, "cfg")
-    cfg.connections = 10
-    cfg.duration = 10
-    cfg.threads = 3
-
-    parts = http_parser_url()
-    wrk.parse_url(url, pointer(parts))
-    wrk.wrk_run(url, headers, parts)
-
+    wrk.benchmark(url.encode("utf-8"))

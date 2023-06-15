@@ -2,8 +2,7 @@
 #include "wrk.h"
 
 void usage();
-int parse_args(struct config *, char **, struct http_parser_url *, char **, int,
-               char **);
+int parse_args(struct config *, char **, char **, int, char **);
 void print_stats_header();
 void print_stats(char *, stats *, char *(*)(long double));
 void print_stats_latency(stats *);
@@ -11,9 +10,7 @@ void print_stats_latency(stats *);
 struct option longopts[] = {{"connections", required_argument, NULL, 'c'},
                             {"duration", required_argument, NULL, 'd'},
                             {"threads", required_argument, NULL, 't'},
-                            {"script", required_argument, NULL, 's'},
                             {"header", required_argument, NULL, 'H'},
-                            {"latency", no_argument, NULL, 'L'},
                             {"timeout", required_argument, NULL, 'T'},
                             {"help", no_argument, NULL, 'h'},
                             {"version", no_argument, NULL, 'v'},
@@ -21,9 +18,8 @@ struct option longopts[] = {{"connections", required_argument, NULL, 'c'},
 
 int main(int argc, char **argv) {
   char *url, **headers = zmalloc(argc * sizeof(char *));
-  struct http_parser_url parts = {};
 
-  if (parse_args(&cfg, &url, &parts, headers, argc, argv)) {
+  if (parse_args(&cfg, &url, headers, argc, argv)) {
     usage();
     exit(1);
   }
@@ -33,7 +29,8 @@ int main(int argc, char **argv) {
   printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", cfg.threads,
          cfg.connections);
 
-  wrk_run(url, headers, parts);
+  request = "GET / HTTP/1.1\nHost: localhost:8000\r\n\r\n";
+  benchmark(url);
 
   long double runtime_s = runtime_us / 1000000.0;
   long double req_per_s = complete / runtime_s;
@@ -76,9 +73,7 @@ void usage() {
          "    -d, --duration    <T>  Duration of test           \n"
          "    -t, --threads     <N>  Number of threads to use   \n"
          "                                                      \n"
-         "    -s, --script      <S>  Load Lua script file       \n"
          "    -H, --header      <H>  Add header to request      \n"
-         "        --latency          Print latency statistics   \n"
          "        --timeout     <T>  Socket/request timeout     \n"
          "    -v, --version          Print version details      \n"
          "                                                      \n"
@@ -86,19 +81,7 @@ void usage() {
          "  Time arguments may include a time unit (2s, 2m, 2h)\n");
 }
 
-int parse_url(char *url, struct http_parser_url *parts) {
-  if (!http_parser_parse_url(url, strlen(url), 0, parts)) {
-    if (!(parts->field_set & (1 << UF_SCHEMA)))
-      return 0;
-    if (!(parts->field_set & (1 << UF_HOST)))
-      return 0;
-    return 1;
-  }
-  return 0;
-}
-
-int parse_args(struct config *cfg, char **url, struct http_parser_url *parts,
-               char **headers, int argc, char **argv) {
+int parse_args(struct config *cfg, char **url, char **headers, int argc, char **argv) {
   char **header = headers;
   int c;
 
@@ -108,7 +91,7 @@ int parse_args(struct config *cfg, char **url, struct http_parser_url *parts,
   cfg->duration = 10;
   cfg->timeout = SOCKET_TIMEOUT_MS;
 
-  while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) !=
+  while ((c = getopt_long(argc, argv, "t:c:d:H:T:rv?", longopts, NULL)) !=
          -1) {
     switch (c) {
     case 't':
@@ -123,14 +106,8 @@ int parse_args(struct config *cfg, char **url, struct http_parser_url *parts,
       if (scan_time(optarg, &cfg->duration))
         return -1;
       break;
-    case 's':
-      cfg->script = optarg;
-      break;
     case 'H':
       *header++ = optarg;
-      break;
-    case 'L':
-      cfg->latency = true;
       break;
     case 'T':
       if (scan_time(optarg, &cfg->timeout))
@@ -151,11 +128,6 @@ int parse_args(struct config *cfg, char **url, struct http_parser_url *parts,
 
   if (optind == argc || !cfg->threads || !cfg->duration)
     return -1;
-
-  if (!parse_url(argv[optind], parts)) {
-    fprintf(stderr, "invalid URL: %s\n", argv[optind]);
-    return -1;
-  }
 
   if (!cfg->connections || cfg->connections < cfg->threads) {
     fprintf(stderr, "number of connections must be >= threads\n");

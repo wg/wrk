@@ -1,4 +1,14 @@
 import pywrk
 
 if __name__ == "__main__":
-    pywrk.run("https://google.com")
+    request = {
+        "url": "http://localhost:8000",
+        "method": "GET",
+    }
+    config = {
+        "connections": 100,
+        "duration": 10,
+        "threads": 12,
+    }
+
+    pywrk.benchmark(request, config)

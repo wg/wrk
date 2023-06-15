@@ -9,6 +9,7 @@ uint64_t bytes = 0;
 uint64_t runtime_us = 0;
 struct errors errors = {0};
 struct statistics_t statistics;
+char *request = NULL;
 
 static struct sock sock = {.connect = sock_connect,
                            .close = sock_close,
@@ -23,7 +24,13 @@ static volatile sig_atomic_t stop = 0;
 
 static void handler(int sig) { stop = 1; }
 
-void wrk_run(char *url, char **headers, struct http_parser_url parts) {
+int benchmark(char *url) {
+  struct http_parser_url parts = {};
+  if (!parse_url(url, &parts)) {
+    fprintf(stderr, "invalid URL: %s\n", url);
+    return 1;
+  }
+
   char *schema = copy_url_part(url, &parts, UF_SCHEMA);
   char *host = copy_url_part(url, &parts, UF_HOST);
   char *port = copy_url_part(url, &parts, UF_PORT);
@@ -33,7 +40,7 @@ void wrk_run(char *url, char **headers, struct http_parser_url parts) {
     if ((cfg.ctx = ssl_init()) == NULL) {
       fprintf(stderr, "unable to initialize SSL\n");
       ERR_print_errors_fp(stderr);
-      exit(1);
+      return 1;
     }
     sock.connect = ssl_connect;
     sock.close = ssl_close;
@@ -56,10 +63,9 @@ void wrk_run(char *url, char **headers, struct http_parser_url parts) {
   if (addr == NULL) {
     char *msg = strerror(errno);
     fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
-    exit(1);
+    return 1;
   }
 
-  cfg.pipeline = 1; // use when you want to send multiple other requests
   cfg.host = host;
 
   for (uint64_t i = 0; i < cfg.threads; i++) {
@@ -71,7 +77,7 @@ void wrk_run(char *url, char **headers, struct http_parser_url parts) {
     if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
       char *msg = strerror(errno);
       fprintf(stderr, "unable to create thread %" PRIu64 ": %s\n", i, msg);
-      exit(2);
+      return 2;
     }
   }
 
@@ -102,20 +108,19 @@ void wrk_run(char *url, char **headers, struct http_parser_url parts) {
   }
 
   runtime_us = time_us() - start;
-  printf("complete: %d, connections: %d, runtime_us: %d\n", complete, cfg.connections, runtime_us);
   if (complete / cfg.connections > 0) {
     int64_t interval = runtime_us / (complete / cfg.connections);
     stats_correct(statistics.latency, interval);
   }
+
+  return 0;
 }
 
 void *thread_main(void *arg) {
   thread *thread = arg;
 
-  char *request = NULL;
   size_t length = 0;
 
-  request = "GET / HTTP/1.1\nHost: localhost:8000\r\n\r\n";
   length = strlen(request);
 
   thread->cs = zcalloc(thread->connections * sizeof(connection));
@@ -126,7 +131,6 @@ void *thread_main(void *arg) {
     c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
     c->request = request;
     c->length = length;
-    c->delayed = cfg.delay;
     connect_socket(thread, c);
   }
 
@@ -201,7 +205,7 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
 
 static int delay_request(aeEventLoop *loop, long long id, void *data) {
   connection *c = data;
-  c->delayed = false;
+  c->delayed = false;  // TODO: need review
   aeCreateFileEvent(loop, c->fd, AE_WRITABLE, socket_writeable, c);
   return AE_NOMORE;
 }
@@ -228,7 +232,6 @@ static int response_complete(http_parser *parser) {
     if (!stats_record(statistics.latency, now - c->start)) {
       thread->errors.timeout++;
     }
-    c->delayed = cfg.delay;
     aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
   }
 
@@ -273,7 +276,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
   thread *thread = c->thread;
 
   if (c->delayed) {
-    uint64_t delay = 0; // need review
+    uint64_t delay = 0; // @TODO: need review
     aeDeleteFileEvent(loop, fd, AE_WRITABLE);
     aeCreateTimeEvent(loop, delay, delay_request, c, NULL);
     return;
@@ -281,7 +284,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   if (!c->written) {
     c->start = time_us();
-    c->pending = cfg.pipeline;
+    c->pending = 1;
   }
 
   char *buf = c->request + c->written;
@@ -365,8 +368,7 @@ static char *copy_url_part(char *url, struct http_parser_url *parts,
   return part;
 }
 
-static void lookup_service(char *host, char *service,
-                           struct addrinfo **result) {
+static int lookup_service(char *host, char *service, struct addrinfo **result) {
   struct addrinfo *addrs;
   struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM};
   int rc;
@@ -374,7 +376,7 @@ static void lookup_service(char *host, char *service,
   if ((rc = getaddrinfo(host, service, &hints, &addrs)) != 0) {
     const char *msg = gai_strerror(rc);
     fprintf(stderr, "unable to resolve %s:%s %s\n", host, service, msg);
-    exit(1);
+    return 1;
   }
 
   for (struct addrinfo *addr = addrs; addr != NULL; addr = addr->ai_next) {
@@ -389,6 +391,17 @@ static void lookup_service(char *host, char *service,
       break;
     }
   }
-
   // freeaddrinfo(addrs);
+  return 0;
+}
+
+int parse_url(char *url, struct http_parser_url *parts) {
+  if (!http_parser_parse_url(url, strlen(url), 0, parts)) {
+    if (!(parts->field_set & (1 << UF_SCHEMA)))
+      return 0;
+    if (!(parts->field_set & (1 << UF_HOST)))
+      return 0;
+    return 1;
+  }
+  return 0;
 }
