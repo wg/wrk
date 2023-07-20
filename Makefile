@@ -40,7 +40,7 @@ endif
 all: $(BIN)
 
 clean:
-	$(RM) -rf $(BIN) $(SHARED) obj/*
+	$(RM) -rf $(BIN) $(SHARED) obj
 
 $(BIN): $(OBJ)
 	@echo LINK $(BIN)

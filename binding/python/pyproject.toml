@@ -1,20 +1,16 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pywrk"
 description = "Python binding for wrk"
 readme = "README.md"
-requires-python = ">=3.7"
-license = "MIT"
+requires-python = ">=3.8"
 authors = [
     { name = "Nguyen Khac Thanh", email = "nguyenkhacthanh244@gmail.com" },
 ]
-dynamic = ["version"]
+version = "0.0.1"
 
 [project.urls]
 Homepage = "https://github.com/magiskboy/wrk"
-
-[tool.hatch.version]
-path = "pywrk/__init__.py"
