@@ -1,3 +1,3 @@
-import core
+from .core import benchmark
 
-__all__ = ["core"]
+__all__ = ["benchmark"]

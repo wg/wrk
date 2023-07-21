@@ -6,7 +6,7 @@ LDFLAGS += $(shell python-config --ldflags)
 
 all: $(SHARED)
 
-$(ODIR)/core.o: ./python/pywrk/core.c
+$(ODIR)/core.o: ./python/pywrk/core.c $(ODIR)
 	$(CC) $(CFLAGS) -c -o $@ $< 
 
 $(SHARED): $(ODIR)/core.o $(OBJ) $(DEPS)

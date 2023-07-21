@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", wrk_cfg.threads,
          wrk_cfg.connections);
 
-  wrk_request = "GET / HTTP/1.1\nHost: localhost:8000\r\n\r\n";
+  wrk_request = "GET / HTTP/1.1\nHost: google.com\r\n\r\n";
   benchmark(url);
 
   long double runtime_s = wrk_runtime_us / 1000000.0;
