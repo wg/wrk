@@ -3,13 +3,13 @@
 #include "stats.h"
 #include "types.h"
 
-struct config cfg;
-uint64_t complete = 0;
-uint64_t bytes = 0;
-uint64_t runtime_us = 0;
-struct errors errors = {0};
-struct statistics_t statistics;
-char *request = NULL;
+struct config wrk_cfg;
+uint64_t wrk_complete = 0;
+uint64_t wrk_bytes = 0;
+uint64_t wrk_runtime_us = 0;
+struct errors wrk_errors = {0};
+struct statistics_t wrk_statistics;
+char *wrk_request = NULL;
 
 static struct sock sock = {.connect = sock_connect,
                            .close = sock_close,
@@ -37,7 +37,7 @@ int benchmark(char *url) {
   char *service = port ? port : schema;
 
   if (!strncmp("https", schema, 5)) {
-    if ((cfg.ctx = ssl_init()) == NULL) {
+    if ((wrk_cfg.ctx = ssl_init()) == NULL) {
       fprintf(stderr, "unable to initialize SSL\n");
       ERR_print_errors_fp(stderr);
       return 1;
@@ -52,10 +52,10 @@ int benchmark(char *url) {
   signal(SIGPIPE, SIG_IGN);
   signal(SIGINT, SIG_IGN);
 
-  statistics.latency = stats_alloc(cfg.timeout * 1000);
-  statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
-  statistics.ttfb = stats_alloc(MAX_THREAD_RATE_S);
-  thread *threads = zcalloc(cfg.threads * sizeof(thread));
+  wrk_statistics.latency = stats_alloc(wrk_cfg.timeout * 1000);
+  wrk_statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
+  wrk_statistics.ttfb = stats_alloc(MAX_THREAD_RATE_S);
+  thread *threads = zcalloc(wrk_cfg.threads * sizeof(thread));
 
   struct addrinfo *addr = NULL;
   lookup_service(host, service, &addr);
@@ -66,12 +66,12 @@ int benchmark(char *url) {
     return 1;
   }
 
-  cfg.host = host;
+  wrk_cfg.host = host;
 
-  for (uint64_t i = 0; i < cfg.threads; i++) {
+  for (uint64_t i = 0; i < wrk_cfg.threads; i++) {
     thread *t = &threads[i];
-    t->loop = aeCreateEventLoop(10 + cfg.connections * 3);
-    t->connections = cfg.connections / cfg.threads;
+    t->loop = aeCreateEventLoop(10 + wrk_cfg.connections * 3);
+    t->connections = wrk_cfg.connections / wrk_cfg.threads;
     t->addr = addr;
 
     if (!t->loop || pthread_create(&t->thread, NULL, &thread_main, t)) {
@@ -90,27 +90,27 @@ int benchmark(char *url) {
 
   uint64_t start = time_us();
 
-  sleep(cfg.duration);
+  sleep(wrk_cfg.duration);
   stop = 1;
 
-  for (uint64_t i = 0; i < cfg.threads; i++) {
+  for (uint64_t i = 0; i < wrk_cfg.threads; i++) {
     thread *t = &threads[i];
     pthread_join(t->thread, NULL);
 
-    complete += t->complete;
-    bytes += t->bytes;
+    wrk_complete += t->complete;
+    wrk_bytes += t->bytes;
 
-    errors.connect += t->errors.connect;
-    errors.read += t->errors.read;
-    errors.write += t->errors.write;
-    errors.timeout += t->errors.timeout;
-    errors.status += t->errors.status;
+    wrk_errors.connect += t->errors.connect;
+    wrk_errors.read += t->errors.read;
+    wrk_errors.write += t->errors.write;
+    wrk_errors.timeout += t->errors.timeout;
+    wrk_errors.status += t->errors.status;
   }
 
-  runtime_us = time_us() - start;
-  if (complete / cfg.connections > 0) {
-    int64_t interval = runtime_us / (complete / cfg.connections);
-    stats_correct(statistics.latency, interval);
+  wrk_runtime_us = time_us() - start;
+  if (wrk_complete / wrk_cfg.connections > 0) {
+    int64_t interval = wrk_runtime_us / (wrk_complete / wrk_cfg.connections);
+    stats_correct(wrk_statistics.latency, interval);
   }
 
   return 0;
@@ -121,15 +121,15 @@ void *thread_main(void *arg) {
 
   size_t length = 0;
 
-  length = strlen(request);
+  length = strlen(wrk_request);
 
   thread->cs = zcalloc(thread->connections * sizeof(connection));
   connection *c = thread->cs;
 
   for (uint64_t i = 0; i < thread->connections; i++, c++) {
     c->thread = thread;
-    c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
-    c->request = request;
+    c->ssl = wrk_cfg.ctx ? SSL_new(wrk_cfg.ctx) : NULL;
+    c->request = wrk_request;
     c->length = length;
     connect_socket(thread, c);
   }
@@ -191,7 +191,7 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
     uint64_t elapsed_ms = (time_us() - thread->start) / 1000;
     uint64_t requests = (thread->requests / (double)elapsed_ms) * 1000; // req/s
 
-    stats_record(statistics.requests, requests);
+    stats_record(wrk_statistics.requests, requests);
 
     thread->requests = 0;
     thread->start = time_us();
@@ -229,7 +229,7 @@ static int response_complete(http_parser *parser) {
   }
 
   if (--c->pending == 0) {
-    if (!stats_record(statistics.latency, now - c->start)) {
+    if (!stats_record(wrk_statistics.latency, now - c->start)) {
       thread->errors.timeout++;
     }
     aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
@@ -249,7 +249,7 @@ done:
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
   connection *c = data;
 
-  switch (sock.connect(c, cfg.host)) {
+  switch (sock.connect(c, wrk_cfg.host)) {
   case OK:
     break;
   case ERROR:
@@ -318,7 +318,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
 
   // Time to first byte
   if (c->body.length == 0) {
-    stats_record(statistics.ttfb, time_us() - c->start);
+    stats_record(wrk_statistics.ttfb, time_us() - c->start);
   }
 
   size_t n;

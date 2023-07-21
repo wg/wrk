@@ -19,45 +19,45 @@ struct option longopts[] = {{"connections", required_argument, NULL, 'c'},
 int main(int argc, char **argv) {
   char *url, **headers = zmalloc(argc * sizeof(char *));
 
-  if (parse_args(&cfg, &url, headers, argc, argv)) {
+  if (parse_args(&wrk_cfg, &url, headers, argc, argv)) {
     usage();
     exit(1);
   }
 
-  char *time = format_time_s(cfg.duration);
+  char *time = format_time_s(wrk_cfg.duration);
   printf("Running %s test @ %s\n", time, url);
-  printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", cfg.threads,
-         cfg.connections);
+  printf("  %" PRIu64 " threads and %" PRIu64 " connections\n", wrk_cfg.threads,
+         wrk_cfg.connections);
 
-  request = "GET / HTTP/1.1\nHost: localhost:8000\r\n\r\n";
+  wrk_request = "GET / HTTP/1.1\nHost: localhost:8000\r\n\r\n";
   benchmark(url);
 
-  long double runtime_s = runtime_us / 1000000.0;
-  long double req_per_s = complete / runtime_s;
-  long double bytes_per_s = bytes / runtime_s;
+  long double runtime_s = wrk_runtime_us / 1000000.0;
+  long double req_per_s = wrk_complete / runtime_s;
+  long double bytes_per_s = wrk_bytes / runtime_s;
 
-  if (complete / cfg.connections > 0) {
-    int64_t interval = runtime_us / (complete / cfg.connections);
-    stats_correct(statistics.latency, interval);
+  if (wrk_complete / wrk_cfg.connections > 0) {
+    int64_t interval = wrk_runtime_us / (wrk_complete / wrk_cfg.connections);
+    stats_correct(wrk_statistics.latency, interval);
   }
 
   print_stats_header();
-  print_stats("Latency", statistics.latency, format_time_us);
-  print_stats("Req/Sec", statistics.requests, format_metric);
-  print_stats("TTFB", statistics.ttfb, format_time_us);
-  print_stats_latency(statistics.latency);
+  print_stats("Latency", wrk_statistics.latency, format_time_us);
+  print_stats("Req/Sec", wrk_statistics.requests, format_metric);
+  print_stats("TTFB", wrk_statistics.ttfb, format_time_us);
+  print_stats_latency(wrk_statistics.latency);
 
-  char *runtime_msg = format_time_us(runtime_us);
+  char *runtime_msg = format_time_us(wrk_runtime_us);
 
-  printf("  %" PRIu64 " requests in %s, %sB read\n", complete, runtime_msg,
-         format_binary(bytes));
-  if (errors.connect || errors.read || errors.write || errors.timeout) {
+  printf("  %" PRIu64 " requests in %s, %sB read\n", wrk_complete, runtime_msg,
+         format_binary(wrk_bytes));
+  if (wrk_errors.connect || wrk_errors.read || wrk_errors.write || wrk_errors.timeout) {
     printf("  Socket errors: connect %d, read %d, write %d, timeout %d\n",
-           errors.connect, errors.read, errors.write, errors.timeout);
+           wrk_errors.connect, wrk_errors.read, wrk_errors.write, wrk_errors.timeout);
   }
 
-  if (errors.status) {
-    printf("  Non-2xx or 3xx responses: %d\n", errors.status);
+  if (wrk_errors.status) {
+    printf("  Non-2xx or 3xx responses: %d\n", wrk_errors.status);
   }
 
   printf("Requests/sec: %9.2Lf\n", req_per_s);

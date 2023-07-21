@@ -1,0 +1,13 @@
+include Makefile.in
+
+SHARED := python/pywrk/core.so
+CFLAGS += $(shell python-config --cflags) -Isrc
+LDFLAGS += $(shell python-config --ldflags)
+
+all: $(SHARED)
+
+$(ODIR)/core.o: ./python/pywrk/core.c
+	$(CC) $(CFLAGS) -c -o $@ $< 
+
+$(SHARED): $(ODIR)/core.o $(OBJ) $(DEPS)
+	$(CC) $(LDFLAGS) -shared -o $@ $^ $(LIBS)

@@ -25,13 +25,13 @@
 #include "units.h"
 #include "zmalloc.h"
 
-extern struct config cfg;
-extern struct statistics_t statistics;
-extern uint64_t complete;
-extern uint64_t bytes;
-extern uint64_t runtime_us;
-extern struct errors errors;
-extern char* request;
+extern struct config wrk_cfg;
+extern struct statistics_t wrk_statistics;
+extern uint64_t wrk_complete;
+extern uint64_t wrk_bytes;
+extern uint64_t wrk_runtime_us;
+extern struct errors wrk_errors;
+extern char* wrk_request;
 
 int benchmark(char *);
 int parse_url(char*, struct http_parser_url*);
