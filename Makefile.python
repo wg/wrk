@@ -1,13 +1,21 @@
 include Makefile.in
 
 SHARED := python/pywrk/core.so
-CFLAGS += $(shell python-config --cflags) -Isrc
-LDFLAGS += $(shell python-config --ldflags)
+
+ifeq ($(TARGET), darwin)
+	CFLAGS += $(shell python -c "import sysconfig; print(sysconfig.get_config_var('PY_BUILTIN_MODULE_CFLAGS'))") -I$(shell python -c "import sysconfig; print(sysconfig.get_config_var('CONFINCLUDEPY'))") -Isrc
+	CC := $(shell python -c "import sysconfig; print(sysconfig.get_config_var('LDSHARED'))")
+
+else ifeq ($(TARGET), linux)
+	LDFLAGS += $(shell python-config --ldflags) -shared
+	CFLAGS 	+= $(shell python-config --cflags) -Isrc
+
+endif
 
 all: $(SHARED)
 
 $(ODIR)/core.o: ./python/pywrk/core.c $(ODIR)
-	$(CC) $(CFLAGS) -c -o $@ $< 
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(SHARED): $(ODIR)/core.o $(OBJ) $(DEPS)
-	$(CC) $(LDFLAGS) -shared -o $@ $^ $(LIBS)
+	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@

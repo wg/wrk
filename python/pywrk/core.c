@@ -9,40 +9,49 @@
 
 
 PyObject *method_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
-    Py_BEGIN_ALLOW_THREADS
-
     wrk_cfg.host = NULL;
     wrk_cfg.connections = 2;
-    wrk_cfg.duration = 10;
+    wrk_cfg.duration = 3;
     wrk_cfg.timeout = 3000;
     wrk_cfg.threads = 12;
     wrk_request = "GET / HTTP/1.1\nHost: google.com\r\n\r\n";
 
-    static char *kwlist[] = {"host", "connections", "duration", "timeout", "timeout", "threads", "http_message", NULL};
+    static char *kwlist[] = {"host", "connections", "duration", "timeout", "threads", "http_message", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s|iiiis", kwlist, 
-                                     &wrk_cfg.host, &wrk_cfg.connections, &wrk_cfg.duration, &wrk_cfg.timeout, &wrk_cfg.threads, &wrk_request)) 
-    {
+    if (!PyArg_ParseTupleAndKeywords(
+        args,
+        kwargs,
+        "s|iiiis",
+        kwlist, 
+        &wrk_cfg.host,
+        &wrk_cfg.connections, 
+        &wrk_cfg.duration,
+        &wrk_cfg.timeout,
+        &wrk_cfg.threads,
+        &wrk_request
+    )) {
         return PyLong_FromLong(1);
     }
 
     printf("Host %s\n", wrk_cfg.host);
-    printf("connections %d\n", wrk_cfg.connections);
-    printf("duration %d\n", wrk_cfg.duration);
-    printf("timeout %d\n", wrk_cfg.timeout);
-    printf("threads %d\n", wrk_cfg.threads);
+    printf("connections %" PRIu64 "\n", wrk_cfg.connections);
+    printf("duration %" PRIu64 "\n", wrk_cfg.duration);
+    printf("timeout %" PRIu64 "\n", wrk_cfg.timeout);
+    printf("threads %" PRIu64 "\n", wrk_cfg.threads);
     printf("msg %s\n", wrk_request);
 
+    Py_BEGIN_ALLOW_THREADS
     benchmark(wrk_cfg.host);
+    Py_END_ALLOW_THREADS
 
     printf("Complete: %" PRIu64 "\n", wrk_complete);
+    printf("Bytes: %" PRIu64 "\n", wrk_bytes);
     printf("Error read: %" PRIu32 "\n", wrk_errors.read);
     printf("Error write: %" PRIu32 "\n", wrk_errors.write);
     printf("Error timeout: %" PRIu32 "\n", wrk_errors.timeout);
     printf("Error connect: %" PRIu32 "\n", wrk_errors.connect);
     printf("Error status: %" PRIu32 "\n", wrk_errors.status);
     
-    Py_END_ALLOW_THREADS
 
     return PyLong_FromLong(0);
 }
