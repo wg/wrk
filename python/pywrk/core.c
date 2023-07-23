@@ -1,14 +1,16 @@
 #include <Python.h>
-#include "ceval.h"
-#include "longobject.h"
-#include "methodobject.h"
+#include <ceval.h>
+#include <longobject.h>
+#include <methodobject.h>
 #include <pytypedefs.h>
-#include <stdio.h>
 #include <inttypes.h>
+#include <dictobject.h>
+#include "modsupport.h"
+#include "object.h"
 #include "wrk.h"
 
 
-PyObject *method_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
+PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
     wrk_cfg.host = NULL;
     wrk_cfg.connections = 2;
     wrk_cfg.duration = 3;
@@ -33,31 +35,63 @@ PyObject *method_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
         return PyLong_FromLong(1);
     }
 
-    printf("Host %s\n", wrk_cfg.host);
-    printf("connections %" PRIu64 "\n", wrk_cfg.connections);
-    printf("duration %" PRIu64 "\n", wrk_cfg.duration);
-    printf("timeout %" PRIu64 "\n", wrk_cfg.timeout);
-    printf("threads %" PRIu64 "\n", wrk_cfg.threads);
-    printf("msg %s\n", wrk_request);
-
     Py_BEGIN_ALLOW_THREADS
     benchmark(wrk_cfg.host);
     Py_END_ALLOW_THREADS
 
-    printf("Complete: %" PRIu64 "\n", wrk_complete);
-    printf("Bytes: %" PRIu64 "\n", wrk_bytes);
-    printf("Error read: %" PRIu32 "\n", wrk_errors.read);
-    printf("Error write: %" PRIu32 "\n", wrk_errors.write);
-    printf("Error timeout: %" PRIu32 "\n", wrk_errors.timeout);
-    printf("Error connect: %" PRIu32 "\n", wrk_errors.connect);
-    printf("Error status: %" PRIu32 "\n", wrk_errors.status);
-    
+    PyObject* py_errors = Py_BuildValue("{s:i,s:i,s:i,s:i,s:i}", 
+        "read", wrk_errors.read,
+        "write", wrk_errors.write,
+        "connect", wrk_errors.connect,
+        "timeout", wrk_errors.timeout,
+        "status", wrk_errors.status
+    );
+    Py_XINCREF(py_errors);
 
-    return PyLong_FromLong(0);
+    PyObject* py_latency = Py_BuildValue("{s:i,s:i,s:i,s:i}",
+        "count", wrk_statistics.latency->count,
+        "limit", wrk_statistics.latency->limit,
+        "min", wrk_statistics.latency->min,
+        "max", wrk_statistics.latency->max
+    );
+    Py_XINCREF(py_latency);
+
+    PyObject* py_requests = Py_BuildValue("{s:i,s:i,s:i,s:i}",
+        "count", wrk_statistics.requests->count,
+        "limit", wrk_statistics.requests->limit,
+        "min", wrk_statistics.requests->min,
+        "max", wrk_statistics.requests->max
+    );
+    Py_XINCREF(py_requests);
+
+    PyObject* py_ttfb = Py_BuildValue("{s:i,s:i,s:i,s:i}",
+        "count", wrk_statistics.ttfb->count,
+        "limit", wrk_statistics.ttfb->limit,
+        "min", wrk_statistics.ttfb->min,
+        "max", wrk_statistics.ttfb->max
+    );
+    Py_XINCREF(py_ttfb);
+
+    PyObject* stats = Py_BuildValue("{s:O,s:O,s:O}",
+        "latency", py_latency,
+        "requests", py_requests,
+        "ttfb", py_ttfb
+    );
+    Py_XINCREF(stats);
+
+    PyObject* result = Py_BuildValue("{s:i,s:i,s:i,s:O,s:O}",
+        "completed_requests", wrk_complete,
+        "completed_bytes", wrk_bytes,
+        "runtime_us", wrk_runtime_us,
+        "errors", py_errors,
+        "stats", stats
+    );
+    Py_XINCREF(result);
+    return result;
 }
 
 PyMethodDef methods[] = {
-    {"benchmark", (PyCFunction) method_benchmark, METH_VARARGS | METH_KEYWORDS, "Python interface for fputs C library function"},
+    {"benchmark", (PyCFunction) pywrk_benchmark, METH_VARARGS | METH_KEYWORDS, "Python interface for fputs C library function"},
     {NULL, NULL, 0, NULL}
 };
 
