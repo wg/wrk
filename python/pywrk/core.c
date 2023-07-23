@@ -1,13 +1,12 @@
 #include <Python.h>
-#include <ceval.h>
-#include <longobject.h>
-#include <methodobject.h>
-#include <pytypedefs.h>
-#include <inttypes.h>
-#include <dictobject.h>
-#include "modsupport.h"
+#include <stdint.h>
+#include <stdio.h>
+#include "floatobject.h"
+#include "listobject.h"
+#include "longobject.h"
 #include "object.h"
 #include "wrk.h"
+#include "stats.h"
 
 
 PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
@@ -16,21 +15,32 @@ PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
     wrk_cfg.duration = 3;
     wrk_cfg.timeout = 3000;
     wrk_cfg.threads = 12;
-    wrk_request = "GET / HTTP/1.1\nHost: google.com\r\n\r\n";
+    wrk_request = NULL;
+    PyObject* py_stat_latency_percentile = NULL;
 
-    static char *kwlist[] = {"host", "connections", "duration", "timeout", "threads", "http_message", NULL};
+    static char *kwlist[] = {
+        "host",
+        "connections",
+        "duration",
+        "timeout",
+        "threads",
+        "http_message",
+        "stat_latency_percentile",
+        NULL // sentinel value
+    };
 
     if (!PyArg_ParseTupleAndKeywords(
         args,
         kwargs,
-        "s|iiiis",
+        "s|iiiisO",
         kwlist, 
         &wrk_cfg.host,
         &wrk_cfg.connections, 
         &wrk_cfg.duration,
         &wrk_cfg.timeout,
         &wrk_cfg.threads,
-        &wrk_request
+        &wrk_request,
+        &py_stat_latency_percentile
     )) {
         return PyLong_FromLong(1);
     }
@@ -72,10 +82,29 @@ PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
     );
     Py_XINCREF(py_ttfb);
 
-    PyObject* stats = Py_BuildValue("{s:O,s:O,s:O}",
+    PyObject* latency_percentile = Py_None;
+    if (py_stat_latency_percentile != NULL && py_stat_latency_percentile != Py_None) {
+        latency_percentile = PyList_New(0);
+        int n_percentile = PyList_GET_SIZE(py_stat_latency_percentile);
+        for (int i = 0; i < n_percentile; ++i) {
+            PyObject* item = PyList_GetItem(py_stat_latency_percentile, i);
+            if (PyFloat_Check(item)) {
+                uint64_t value = stats_percentile(wrk_statistics.latency, PyFloat_AsDouble(item));
+                PyList_Insert(latency_percentile, i, PyLong_FromLong(value));
+            }
+            else {
+                PyList_Insert(latency_percentile, i, PyLong_FromLong(0));
+            }
+        }
+    }
+    Py_INCREF(latency_percentile);
+
+
+    PyObject* stats = Py_BuildValue("{s:O,s:O,s:O,s:O}",
         "latency", py_latency,
         "requests", py_requests,
-        "ttfb", py_ttfb
+        "ttfb", py_ttfb,
+        "latency_percentile", latency_percentile
     );
     Py_XINCREF(stats);
 
