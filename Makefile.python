@@ -3,7 +3,9 @@ include Makefile.in
 SHARED := python/pywrk/core.so
 
 ifeq ($(TARGET), darwin)
-	CFLAGS += $(shell python -c "import sysconfig; print(sysconfig.get_config_var('PY_BUILTIN_MODULE_CFLAGS'))") -I$(shell python -c "import sysconfig; print(sysconfig.get_config_var('CONFINCLUDEPY'))") -Isrc
+	CFLAGS += $(shell python -c "import sysconfig; print(sysconfig.get_config_var('PY_BUILTIN_MODULE_CFLAGS'))")
+	CFLAGS += -I$(shell python -c "import sysconfig; print(sysconfig.get_config_var('CONFINCLUDEPY'))")
+	CFLAGS += -Isrc
 	CC := $(shell python -c "import sysconfig; print(sysconfig.get_config_var('LDSHARED'))")
 
 else ifeq ($(TARGET), linux)

@@ -4,9 +4,8 @@
   load when run on a single multi-core CPU. It combines a multithreaded
   design with scalable event notification systems such as epoll and kqueue.
 
-  An optional LuaJIT script can perform HTTP request generation, response
-  processing, and custom reporting. Details are available in SCRIPTING and
-  several examples are located in [scripts/](scripts/).
+  You also use it as library for programming purpose. wrk provides bindings 
+  such as Python, NodeJS and Lua.
 
 ## Basic Usage
 
@@ -26,6 +25,7 @@
       8608 requests in 5.10s, 11.81MB read
     Requests/sec:   1689.28
     Transfer/sec:      2.32MB
+
 ## Command Line Options
 
     -c, --connections: total number of HTTP connections to keep open with
@@ -34,8 +34,6 @@
     -d, --duration:    duration of the test, e.g. 2s, 2m, 2h
 
     -t, --threads:     total number of threads to use
-
-    -s, --script:      LuaJIT script, see SCRIPTING
 
     -H, --header:      HTTP header to add to request, e.g. "User-Agent: wrk"
 
@@ -55,31 +53,3 @@
   a body, will have no performance impact. Per-request actions, particularly
   building a new HTTP request, and use of response() will necessarily reduce
   the amount of load that can be generated.
-
-## Acknowledgements
-
-  wrk contains code from a number of open source projects including the
-  'ae' event loop from redis, the nginx/joyent/node.js 'http-parser',
-  and Mike Pall's LuaJIT. Please consult the NOTICE file for licensing
-  details.
-
-## Cryptography Notice
-
-  This distribution includes cryptographic software. The country in
-  which you currently reside may have restrictions on the import,
-  possession, use, and/or re-export to another country, of encryption
-  software. BEFORE using any encryption software, please check your
-  country's laws, regulations and policies concerning the import,
-  possession, or use, and re-export of encryption software, to see if
-  this is permitted. See <http://www.wassenaar.org/> for more
-  information.
-
-  The U.S. Government Department of Commerce, Bureau of Industry and
-  Security (BIS), has classified this software as Export Commodity
-  Control Number (ECCN) 5D002.C.1, which includes information security
-  software using or performing cryptographic functions with symmetric
-  algorithms. The form and manner of this distribution makes it
-  eligible for export under the License Exception ENC Technology
-  Software Unrestricted (TSU) exception (see the BIS Export
-  Administration Regulations, Section 740.13) for both object code and
-  source code.
