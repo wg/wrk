@@ -95,7 +95,8 @@ def generate_http_message(
 
     path = parsed_url.path
     if path:
-        path += f"?{parsed_url.query}"
+        if parsed_url.query:
+            path += f"?{parsed_url.query}"
     else:
         path = "/"
 
