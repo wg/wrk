@@ -1,66 +1,57 @@
 #ifndef WRK_H
 #define WRK_H
 
-#include "config.h"
-#include <pthread.h>
-#include <inttypes.h>
-#include <sys/types.h>
-#include <netdb.h>
-#include <sys/socket.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <math.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
+#include <sys/uio.h>
+#include <time.h>
+#include <unistd.h>
 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <lua.h>
-
+#include "aprintf.h"
+#include "ssl.h"
 #include "stats.h"
-#include "ae.h"
-#include "http_parser.h"
+#include "types.h"
+#include "units.h"
+#include "zmalloc.h"
 
-#define RECVBUF  8192
+extern struct config wrk_cfg;
+extern struct statistics_t wrk_statistics;
+extern uint64_t wrk_complete;
+extern uint64_t wrk_bytes;
+extern uint64_t wrk_runtime_us;
+extern struct errors wrk_errors;
+extern char* wrk_request;
 
-#define MAX_THREAD_RATE_S   10000000
-#define SOCKET_TIMEOUT_MS   2000
-#define RECORD_INTERVAL_MS  100
+int benchmark(char *);
+int parse_url(char*, struct http_parser_url*);
 
-extern const char *VERSION;
+static void *thread_main(void *);
+static int connect_socket(thread *, connection *);
+static int reconnect_socket(thread *, connection *);
+static int lookup_service(char *, char *, struct addrinfo **);
 
-typedef struct {
-    pthread_t thread;
-    aeEventLoop *loop;
-    struct addrinfo *addr;
-    uint64_t connections;
-    uint64_t complete;
-    uint64_t requests;
-    uint64_t bytes;
-    uint64_t start;
-    lua_State *L;
-    errors errors;
-    struct connection *cs;
-} thread;
+static int record_rate(aeEventLoop *, long long, void *);
 
-typedef struct {
-    char  *buffer;
-    size_t length;
-    char  *cursor;
-} buffer;
+static void socket_connected(aeEventLoop *, int, void *, int);
+static void socket_writeable(aeEventLoop *, int, void *, int);
+static void socket_readable(aeEventLoop *, int, void *, int);
 
-typedef struct connection {
-    thread *thread;
-    http_parser parser;
-    enum {
-        FIELD, VALUE
-    } state;
-    int fd;
-    SSL *ssl;
-    bool delayed;
-    uint64_t start;
-    char *request;
-    size_t length;
-    size_t written;
-    uint64_t pending;
-    buffer headers;
-    buffer body;
-    char buf[RECVBUF];
-} connection;
+static int response_complete(http_parser *);
+
+static uint64_t time_us();
+
+static char *copy_url_part(char *, struct http_parser_url *,
+                           enum http_parser_url_fields);
 
 #endif /* WRK_H */

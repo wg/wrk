@@ -7,13 +7,13 @@
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 
-typedef struct {
+struct errors {
     uint32_t connect;
     uint32_t read;
     uint32_t write;
     uint32_t status;
     uint32_t timeout;
-} errors;
+};
 
 typedef struct {
     uint64_t count;

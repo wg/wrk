@@ -1,10 +1,9 @@
 #ifndef NET_H
 #define NET_H
 
-#include "config.h"
 #include <stdint.h>
 #include <openssl/ssl.h>
-#include "wrk.h"
+#include "types.h"
 
 typedef enum {
     OK,
