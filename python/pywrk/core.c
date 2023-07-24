@@ -1,10 +1,4 @@
 #include <Python.h>
-#include <stdint.h>
-#include <stdio.h>
-#include "floatobject.h"
-#include "listobject.h"
-#include "longobject.h"
-#include "object.h"
 #include "wrk.h"
 #include "stats.h"
 
@@ -89,8 +83,9 @@ PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
         for (int i = 0; i < n_percentile; ++i) {
             PyObject* item = PyList_GetItem(py_stat_latency_percentile, i);
             if (PyFloat_Check(item)) {
-                uint64_t value = stats_percentile(wrk_statistics.latency, PyFloat_AsDouble(item));
-                PyList_Insert(latency_percentile, i, PyLong_FromLong(value));
+                PyList_Insert(latency_percentile, i, PyLong_FromLong(
+                    stats_percentile(wrk_statistics.latency, PyFloat_AsDouble(item))
+                ));
             }
             else {
                 PyList_Insert(latency_percentile, i, PyLong_FromLong(0));
@@ -120,7 +115,7 @@ PyObject *pywrk_benchmark(PyObject* self, PyObject* args, PyObject* kwargs) {
 }
 
 PyMethodDef methods[] = {
-    {"benchmark", (PyCFunction) pywrk_benchmark, METH_VARARGS | METH_KEYWORDS, "Python interface for fputs C library function"},
+    {"benchmark", (PyCFunction) pywrk_benchmark, METH_VARARGS | METH_KEYWORDS, "Python interface for wrk"},
     {NULL, NULL, 0, NULL}
 };
 

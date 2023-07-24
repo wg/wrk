@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   publish:
@@ -26,8 +27,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: build
+      - name: build executable
         run: make target/wrk
+
+      - name: build python package
+        run: |
+          pip install build
+          cd python
+          python -m build
+
+      - name: Upload python package to PYPI
+        uses: pypa/gh-action-pypi-publish@v1.8.6
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2

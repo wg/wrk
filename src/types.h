@@ -1,7 +1,6 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#include "config.h"
 #include <inttypes.h>
 #include <netdb.h>
 #include <pthread.h>

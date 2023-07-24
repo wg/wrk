@@ -3,7 +3,7 @@ from pywrk import benchmark
 
 if __name__ == '__main__':
     result = benchmark(
-        url="https://dummyjson.com/products/1",
+        url="https://google.com",
         connections=100,
         threads=12,
         duration=10,

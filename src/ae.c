@@ -42,7 +42,6 @@
 
 #include "ae.h"
 #include "zmalloc.h"
-#include "config.h"
 
 /* Include the best multiplexing layer supported by this system.
  * The following should be ordered by performances, descending. */

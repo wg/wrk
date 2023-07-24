@@ -28,9 +28,8 @@ DEPS    :=
 CFLAGS  += -I$(ODIR)/include
 LDFLAGS += -L$(ODIR)/lib
 
-ifneq ($(WITH_OPENSSL),)
-	CFLAGS  += -I$(WITH_OPENSSL)/include
-	LDFLAGS += -L$(WITH_OPENSSL)/lib
+ifeq ($(SYS_OPENSSL), 1)
+	LDFLAGS += $(shell pkg-config --libs openssl)
 else
 	DEPS += $(ODIR)/lib/libssl.a
 endif
