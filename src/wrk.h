@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <sys/socket.h>
-
+#include <liburing.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <lua.h>
@@ -33,6 +33,7 @@ typedef struct {
     uint64_t requests;
     uint64_t bytes;
     uint64_t start;
+    int port;
     lua_State *L;
     errors errors;
     struct connection *cs;
@@ -44,11 +45,22 @@ typedef struct {
     char  *cursor;
 } buffer;
 
+typedef struct {
+    int start_conn_idx;
+    int end_conn_idx;
+    struct connection *connection;
+    int port;
+    char host;
+    uint64_t requests;
+} thread_data_t;
+
+
+
 typedef struct connection {
     thread *thread;
     http_parser parser;
     enum {
-        FIELD, VALUE
+        FIELD, VALUE, CONNECT, READ, SEND
     } state;
     int fd;
     SSL *ssl;
@@ -61,6 +73,7 @@ typedef struct connection {
     buffer headers;
     buffer body;
     char buf[RECVBUF];
+    struct sockaddr_in addr;
 } connection;
 
 #endif /* WRK_H */
