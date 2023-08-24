@@ -36,6 +36,8 @@ typedef struct {
     lua_State *L;
     errors errors;
     struct connection *cs;
+    int port;
+    char host;
 } thread;
 
 typedef struct {
@@ -48,7 +50,7 @@ typedef struct connection {
     thread *thread;
     http_parser parser;
     enum {
-        FIELD, VALUE
+        FIELD, VALUE, CONNECT, READ, SEND
     } state;
     int fd;
     SSL *ssl;
@@ -61,6 +63,7 @@ typedef struct connection {
     buffer headers;
     buffer body;
     char buf[RECVBUF];
+    struct sockaddr_in addr;
 } connection;
 
 #endif /* WRK_H */
