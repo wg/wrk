@@ -1,0 +1,17 @@
+name: build
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.builder }}
+    strategy:
+      matrix:
+        builder: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: build
+        run: make
