@@ -54,6 +54,8 @@ typedef struct connection {
     SSL *ssl;
     bool delayed;
     uint64_t start;
+    uint64_t connect_start;
+    uint64_t connect_time;
     char *request;
     size_t length;
     size_t written;
