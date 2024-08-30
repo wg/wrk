@@ -9,7 +9,7 @@
 #include "stats.h"
 #include "wrk.h"
 
-lua_State *script_create(char *, char *, char **);
+lua_State *script_create(char *, char *, char *, char *, char **);
 
 bool script_resolve(lua_State *, char *, char *);
 void script_setup(lua_State *, thread *);

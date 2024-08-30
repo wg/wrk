@@ -14,6 +14,8 @@ static struct config {
     bool     dynamic;
     bool     latency;
     char    *host;
+    char    *method;
+    char    *data;
     char    *script;
     SSL_CTX *ctx;
 } cfg;
@@ -49,7 +51,9 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
+           "    -X, --method      <S>  HTTP method (default: GET) \n"
            "    -H, --header      <H>  Add header to request      \n"
+           "        --data        <S>  Body                       \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
@@ -92,7 +96,7 @@ int main(int argc, char **argv) {
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
     thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
-    lua_State *L = script_create(cfg.script, url, headers);
+    lua_State *L = script_create(cfg.script, url, cfg.method, cfg.data, headers);
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
@@ -106,7 +110,7 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
 
-        t->L = script_create(cfg.script, url, headers);
+        t->L = script_create(cfg.script, url, cfg.method, cfg.data, headers);
         script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
@@ -471,7 +475,9 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
+    { "method",      required_argument, NULL, 'X' },
     { "header",      required_argument, NULL, 'H' },
+    { "data",        required_argument, NULL, 'D' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
@@ -488,8 +494,10 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->connections = 10;
     cfg->duration    = 10;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
+    cfg->method      = "GET";
+    cfg->data        = "";
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:D:s:X:H:T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -503,8 +511,14 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 's':
                 cfg->script = optarg;
                 break;
+            case 'X':
+                cfg->method = optarg;
+                break;
             case 'H':
                 *header++ = optarg;
+                break;
+            case 'D':
+                cfg->data = optarg;
                 break;
             case 'L':
                 cfg->latency = true;
