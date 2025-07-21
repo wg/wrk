@@ -10,6 +10,7 @@ static struct config {
     uint64_t threads;
     uint64_t timeout;
     uint64_t pipeline;
+    uint64_t percent;
     bool     delay;
     bool     dynamic;
     bool     latency;
@@ -31,6 +32,14 @@ static struct sock sock = {
     .readable = sock_readable
 };
 
+static struct sock ssl_sock = {
+    .connect  = ssl_connect,
+    .close    = ssl_close,
+    .read     = ssl_read,
+    .write    = ssl_write,
+    .readable = ssl_readable
+};
+
 static struct http_parser_settings parser_settings = {
     .on_message_complete = response_complete
 };
@@ -49,6 +58,7 @@ static void usage() {
            "    -t, --threads     <N>  Number of threads to use   \n"
            "                                                      \n"
            "    -s, --script      <S>  Load Lua script file       \n"
+           "    -p, --percent     <N>  https percent 0~100        \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
            "        --timeout     <T>  Socket/request timeout     \n"
@@ -78,11 +88,11 @@ int main(int argc, char **argv) {
             ERR_print_errors_fp(stderr);
             exit(1);
         }
-        sock.connect  = ssl_connect;
-        sock.close    = ssl_close;
-        sock.read     = ssl_read;
-        sock.write    = ssl_write;
-        sock.readable = ssl_readable;
+        // sock.connect  = ssl_connect;
+        // sock.close    = ssl_close;
+        // sock.read     = ssl_read;
+        // sock.write    = ssl_write;
+        // sock.readable = ssl_readable;
     }
 
     signal(SIGPIPE, SIG_IGN);
@@ -212,9 +222,17 @@ void *thread_main(void *arg) {
     thread->cs = zcalloc(thread->connections * sizeof(connection));
     connection *c = thread->cs;
 
+    uint64_t remain_ssl_count = thread->connections * cfg.percent / 100;
+
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread = thread;
-        c->ssl     = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
+        // c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
+        if (remain_ssl_count > 0) {
+            c->ssl = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
+            remain_ssl_count --;
+        } else {
+            c->ssl = NULL;
+        }
         c->request = request;
         c->length  = length;
         c->delayed = cfg.delay;
@@ -235,6 +253,21 @@ void *thread_main(void *arg) {
 
 static int connect_socket(thread *thread, connection *c) {
     struct addrinfo *addr = thread->addr;
+
+    if (!c->ssl) {  //把addr的port改成80
+        struct sockaddr_in *ipv4_sockaddr;
+        struct sockaddr_in6 *ipv6_sockaddr;
+
+        // Check the address family
+        if (addr->ai_family == AF_INET) {
+            ipv4_sockaddr = (struct sockaddr_in *)addr->ai_addr;
+            ipv4_sockaddr->sin_port = htons(80); // Set port to 80
+        } else if (addr->ai_family == AF_INET6) {
+            ipv6_sockaddr = (struct sockaddr_in6 *)addr->ai_addr;
+            ipv6_sockaddr->sin6_port = htons(80); // Set port to 80
+        } 
+    }
+    
     struct aeEventLoop *loop = thread->loop;
     int fd, flags;
 
@@ -265,7 +298,8 @@ static int connect_socket(thread *thread, connection *c) {
 
 static int reconnect_socket(thread *thread, connection *c) {
     aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
-    sock.close(c);
+    struct sock lsock = c->ssl ? ssl_sock : sock;
+    lsock.close(c);
     close(c->fd);
     return connect_socket(thread, c);
 }
@@ -361,8 +395,8 @@ static int response_complete(http_parser *parser) {
 
 static void socket_connected(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
-
-    switch (sock.connect(c, cfg.host)) {
+    struct sock lsock = c->ssl ? ssl_sock : sock;
+    switch (lsock.connect(c, cfg.host)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
@@ -385,6 +419,8 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     thread *thread = c->thread;
 
+    struct sock lsock = c->ssl ? ssl_sock : sock;
+
     if (c->delayed) {
         uint64_t delay = script_delay(thread->L);
         aeDeleteFileEvent(loop, fd, AE_WRITABLE);
@@ -404,7 +440,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
     size_t len = c->length  - c->written;
     size_t n;
 
-    switch (sock.write(c, buf, len, &n)) {
+    switch (lsock.write(c, buf, len, &n)) {
         case OK:    break;
         case ERROR: goto error;
         case RETRY: return;
@@ -426,9 +462,9 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
     connection *c = data;
     size_t n;
-
+    struct sock lsock = c->ssl ? ssl_sock : sock;
     do {
-        switch (sock.read(c, &n)) {
+        switch (lsock.read(c, &n)) {
             case OK:    break;
             case ERROR: goto error;
             case RETRY: return;
@@ -438,7 +474,7 @@ static void socket_readable(aeEventLoop *loop, int fd, void *data, int mask) {
         if (n == 0 && !http_body_is_final(&c->parser)) goto error;
 
         c->thread->bytes += n;
-    } while (n == RECVBUF && sock.readable(c) > 0);
+    } while (n == RECVBUF && lsock.readable(c) > 0);
 
     return;
 
@@ -471,6 +507,7 @@ static struct option longopts[] = {
     { "duration",    required_argument, NULL, 'd' },
     { "threads",     required_argument, NULL, 't' },
     { "script",      required_argument, NULL, 's' },
+    { "percent",     required_argument, NULL, 'p' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
     { "timeout",     required_argument, NULL, 'T' },
@@ -487,9 +524,10 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     cfg->threads     = 2;
     cfg->connections = 10;
     cfg->duration    = 10;
+    cfg->percent     = 100;
     cfg->timeout     = SOCKET_TIMEOUT_MS;
 
-    while ((c = getopt_long(argc, argv, "t:c:d:s:H:T:Lrv?", longopts, NULL)) != -1) {
+    while ((c = getopt_long(argc, argv, "t:c:d:s:p:H::T:Lrv?", longopts, NULL)) != -1) {
         switch (c) {
             case 't':
                 if (scan_metric(optarg, &cfg->threads)) return -1;
@@ -502,6 +540,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
                 break;
             case 's':
                 cfg->script = optarg;
+                break;
+            case 'p':
+                if (scan_metric(optarg, &cfg->percent)) return -1;
                 break;
             case 'H':
                 *header++ = optarg;
