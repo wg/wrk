@@ -1,6 +1,12 @@
 CFLAGS  += -std=c99 -Wall -O2 -D_REENTRANT
 LIBS    := -lm -lssl -lcrypto -lpthread
 
+ifeq ($(CONFIG),Debug)
+CFLAGS += -ggdb -o0
+else
+CFLAGS += -ggdb -o2
+endif
+
 TARGET  := $(shell uname -s | tr '[A-Z]' '[a-z]' 2>/dev/null || echo unknown)
 
 ifeq ($(TARGET), sunos)
@@ -108,3 +114,7 @@ $(ODIR)/lib/libssl.a: $(ODIR)/$(OPENSSL)
 vpath %.c   src
 vpath %.h   src
 vpath %.lua scripts
+
+TARGETPATH := ./wrk
+TARGETTYPE := APP
+TARGETNAME := wrk

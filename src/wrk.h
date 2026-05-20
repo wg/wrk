@@ -46,6 +46,7 @@ typedef struct {
 
 typedef struct connection {
     thread *thread;
+	int pos_in_connections;
     http_parser parser;
     enum {
         FIELD, VALUE

@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
     statistics.requests = stats_alloc(MAX_THREAD_RATE_S);
     thread *threads     = zcalloc(cfg.threads * sizeof(thread));
 
-    lua_State *L = script_create(cfg.script, url, headers);
+    lua_State *L = script_create(cfg.threads, cfg.script, url, headers);
     if (!script_resolve(L, host, service)) {
         char *msg = strerror(errno);
         fprintf(stderr, "unable to connect to %s:%s %s\n", host, service, msg);
@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
 
-        t->L = script_create(cfg.script, url, headers);
+        t->L = script_create(cfg.threads, cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
 
         if (i == 0) {
@@ -206,7 +206,7 @@ void *thread_main(void *arg) {
     size_t length = 0;
 
     if (!cfg.dynamic) {
-        script_request(thread->L, &request, &length);
+        script_request(thread->L, &request, &length, 0);
     }
 
     thread->cs = zcalloc(thread->connections * sizeof(connection));
@@ -218,6 +218,7 @@ void *thread_main(void *arg) {
         c->request = request;
         c->length  = length;
         c->delayed = cfg.delay;
+		c->pos_in_connections = i;
         connect_socket(thread, c);
     }
 
@@ -249,6 +250,12 @@ static int connect_socket(thread *thread, connection *c) {
 
     flags = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flags, sizeof(flags));
+	
+	struct timeval rtimeout;
+	rtimeout.tv_sec = cfg.timeout/1000; //秒
+	rtimeout.tv_usec = cfg.timeout%1000 * 1000; //微妙
+	setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,(const char *)&rtimeout,sizeof(struct timeval));
+	//setsockopt(sock,SOL_SOCKET,SO_SNDTIMEO,(const char *)&rtimeout,sizeof(struct timeval));
 
     flags = AE_READABLE | AE_WRITABLE;
     if (aeCreateFileEvent(loop, fd, flags, socket_connected, c) == AE_OK) {
@@ -394,7 +401,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
 
     if (!c->written) {
         if (cfg.dynamic) {
-            script_request(thread->L, &c->request, &c->length);
+            script_request(thread->L, &c->request, &c->length, c->pos_in_connections);
         }
         c->start   = time_us();
         c->pending = cfg.pipeline;
@@ -512,6 +519,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
+				printf("wrk set socket timeout to %ld ms\n", cfg->timeout);
                 break;
             case 'v':
                 printf("wrk %s [%s] ", VERSION, aeGetApiName());

@@ -7,6 +7,7 @@ local wrk = {
    headers = {},
    body    = nil,
    thread  = nil,
+   parallel_worker = nil,
 }
 
 function wrk.resolve(host, service)
@@ -19,10 +20,10 @@ function wrk.resolve(host, service)
    wrk.addrs = addrs
 end
 
-function wrk.setup(thread)
+function wrk.setup(thread, cs)
    thread.addr = wrk.addrs[1]
    if type(setup) == "function" then
-      setup(thread)
+      setup(thread, cs)
    end
 end
 
@@ -42,7 +43,7 @@ function wrk.init(args)
    end
 
    local req = wrk.format()
-   wrk.request = function()
+   wrk.request = function(key)
       return req
    end
 end
